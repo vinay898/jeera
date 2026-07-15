@@ -1,18 +1,41 @@
 <?php
 
+use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
+use App\Enums\TicketType;
+use App\Models\Epic;
 use App\Models\Project;
 use App\Models\Ticket;
+use Filament\Actions\Action;
+use Filament\Actions\Concerns\InteractsWithActions;
+use Filament\Actions\Contracts\HasActions;
 use Filament\Facades\Filament;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\RichEditor;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Concerns\InteractsWithForms;
+use Filament\Forms\Contracts\HasForms;
+use Filament\Notifications\Notification;
+use Filament\Schemas\Components\Section;
+use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 
-new class extends Component
+new class extends Component implements HasActions, HasForms
 {
+    use InteractsWithActions;
+    use InteractsWithForms;
+
     #[Url]
     public ?int $projectId = null;
+
+    public ?int $editingTicketId = null;
 
     public function mount(?int $projectId = null): void
     {
@@ -71,6 +94,258 @@ new class extends Component
         unset($this->ticketsByStatus);
     }
 
+    public function openEditModal(int $ticketId): void
+    {
+        $this->editingTicketId = $ticketId;
+        $this->mountAction('editTicket');
+    }
+
+    public function createTicketAction(): Action
+    {
+        return Action::make('createTicket')
+            ->label('Ticket')
+            ->icon(Heroicon::OutlinedTicket)
+            ->modalHeading('Create Ticket')
+            ->modalWidth('4xl')
+            ->schema([
+                Section::make('Details')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('title')
+                            ->required()
+                            ->maxLength(255)
+                            ->columnSpanFull(),
+                        Textarea::make('description')
+                            ->rows(3)
+                            ->columnSpanFull(),
+                        Select::make('project_id')
+                            ->label('Project')
+                            ->options(fn () => Project::where('team_id', $this->team->id)->pluck('name', 'id'))
+                            ->required()
+                            ->default($this->projectId)
+                            ->searchable(),
+                        Select::make('type')
+                            ->options(TicketType::class)
+                            ->default(TicketType::Task)
+                            ->required(),
+                        Select::make('status')
+                            ->options(TicketStatus::class)
+                            ->default(TicketStatus::Open)
+                            ->required(),
+                        Select::make('priority')
+                            ->options(TicketPriority::class)
+                            ->default(TicketPriority::Medium)
+                            ->required(),
+                        Select::make('assignee_id')
+                            ->label('Assignee')
+                            ->options(fn () => $this->team->users()->pluck('name', 'users.id'))
+                            ->searchable(),
+                        TextInput::make('story_points')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100),
+                    ]),
+            ])
+            ->action(function (array $data): void {
+                $project = Project::find($data['project_id']);
+                $ticketCount = Ticket::where('project_id', $project->id)->count() + 1;
+
+                Ticket::create([
+                    'team_id' => $this->team->id,
+                    'project_id' => $data['project_id'],
+                    'key' => $project->key . '-' . $ticketCount,
+                    'title' => $data['title'],
+                    'description' => $data['description'] ?? null,
+                    'type' => $data['type'],
+                    'status' => $data['status'],
+                    'priority' => $data['priority'],
+                    'assignee_id' => $data['assignee_id'] ?? null,
+                    'reporter_id' => auth()->id(),
+                    'story_points' => $data['story_points'] ?? null,
+                ]);
+
+                unset($this->ticketsByStatus);
+
+                Notification::make()
+                    ->title('Ticket created')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public function createProjectAction(): Action
+    {
+        return Action::make('createProject')
+            ->label('Project')
+            ->icon(Heroicon::OutlinedFolder)
+            ->modalHeading('Create Project')
+            ->modalWidth('lg')
+            ->schema([
+                TextInput::make('name')
+                    ->required()
+                    ->maxLength(255),
+                TextInput::make('key')
+                    ->required()
+                    ->maxLength(10)
+                    ->helperText('Short identifier (e.g., PROJ)')
+                    ->dehydrateStateUsing(fn ($state) => Str::upper($state)),
+                Textarea::make('description')
+                    ->rows(3),
+            ])
+            ->action(function (array $data): void {
+                Project::create([
+                    'team_id' => $this->team->id,
+                    'name' => $data['name'],
+                    'key' => Str::upper($data['key']),
+                    'description' => $data['description'] ?? null,
+                    'lead_user_id' => auth()->id(),
+                ]);
+
+                unset($this->projects);
+
+                Notification::make()
+                    ->title('Project created')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public function createEpicAction(): Action
+    {
+        return Action::make('createEpic')
+            ->label('Epic')
+            ->icon(Heroicon::OutlinedBolt)
+            ->modalHeading('Create Epic')
+            ->modalWidth('lg')
+            ->schema([
+                TextInput::make('title')
+                    ->required()
+                    ->maxLength(255),
+                Select::make('project_id')
+                    ->label('Project')
+                    ->options(fn () => Project::where('team_id', $this->team->id)->pluck('name', 'id'))
+                    ->required()
+                    ->default($this->projectId)
+                    ->searchable(),
+                Textarea::make('description')
+                    ->rows(3),
+                DatePicker::make('start_date'),
+                DatePicker::make('end_date'),
+            ])
+            ->action(function (array $data): void {
+                $project = Project::find($data['project_id']);
+                $epicCount = Epic::where('project_id', $project->id)->count() + 1;
+
+                Epic::create([
+                    'team_id' => $this->team->id,
+                    'project_id' => $data['project_id'],
+                    'key' => $project->key . '-E' . $epicCount,
+                    'title' => $data['title'],
+                    'description' => $data['description'] ?? null,
+                    'start_date' => $data['start_date'] ?? null,
+                    'end_date' => $data['end_date'] ?? null,
+                ]);
+
+                Notification::make()
+                    ->title('Epic created')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    public function editTicketAction(): Action
+    {
+        return Action::make('editTicket')
+            ->modalHeading(fn () => 'Edit Ticket')
+            ->modalWidth('4xl')
+            ->fillForm(function (): array {
+                $ticket = Ticket::find($this->editingTicketId);
+
+                return [
+                    'title' => $ticket->title,
+                    'description' => $ticket->description,
+                    'project_id' => $ticket->project_id,
+                    'type' => $ticket->type,
+                    'status' => $ticket->status,
+                    'priority' => $ticket->priority,
+                    'assignee_id' => $ticket->assignee_id,
+                    'story_points' => $ticket->story_points,
+                    'due_date' => $ticket->due_date,
+                    'labels' => $ticket->labels ?? [],
+                ];
+            })
+            ->schema([
+                Section::make('Details')
+                    ->columns(2)
+                    ->schema([
+                        TextInput::make('title')
+                            ->required()
+                            ->maxLength(255)
+                            ->columnSpanFull(),
+                        RichEditor::make('description')
+                            ->columnSpanFull()
+                            ->toolbarButtons([
+                                'bold',
+                                'italic',
+                                'bulletList',
+                                'orderedList',
+                                'link',
+                            ]),
+                        Select::make('project_id')
+                            ->label('Project')
+                            ->options(fn () => Project::where('team_id', $this->team->id)->pluck('name', 'id'))
+                            ->required()
+                            ->searchable(),
+                        Select::make('type')
+                            ->options(TicketType::class)
+                            ->required(),
+                        Select::make('status')
+                            ->options(TicketStatus::class)
+                            ->required(),
+                        Select::make('priority')
+                            ->options(TicketPriority::class)
+                            ->required(),
+                        Select::make('assignee_id')
+                            ->label('Assignee')
+                            ->options(fn () => $this->team->users()->pluck('name', 'users.id'))
+                            ->searchable(),
+                        TextInput::make('story_points')
+                            ->numeric()
+                            ->minValue(0)
+                            ->maxValue(100),
+                        DatePicker::make('due_date'),
+                        TagsInput::make('labels')
+                            ->placeholder('Add labels'),
+                    ]),
+            ])
+            ->action(function (array $data): void {
+                $ticket = Ticket::find($this->editingTicketId);
+                $ticket->update([
+                    'title' => $data['title'],
+                    'description' => $data['description'] ?? null,
+                    'project_id' => $data['project_id'],
+                    'type' => $data['type'],
+                    'status' => $data['status'],
+                    'priority' => $data['priority'],
+                    'assignee_id' => $data['assignee_id'] ?? null,
+                    'story_points' => $data['story_points'] ?? null,
+                    'due_date' => $data['due_date'] ?? null,
+                    'labels' => $data['labels'] ?? [],
+                ]);
+
+                unset($this->ticketsByStatus);
+                $this->editingTicketId = null;
+
+                Notification::make()
+                    ->title('Ticket updated')
+                    ->success()
+                    ->send();
+            })
+            ->after(function () {
+                $this->editingTicketId = null;
+            });
+    }
+
     public function getStatusHeaderColor(TicketStatus $status): string
     {
         return match ($status) {
@@ -107,21 +382,82 @@ new class extends Component
 ?>
 
 <div>
-    {{-- Project Filter --}}
-    <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
-        <label for="project-filter" style="font-size: 14px; font-weight: 500; color: #374151;">
-            Filter by Project:
-        </label>
-        <select
-            id="project-filter"
-            wire:model.live="projectId"
-            style="padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white;"
-        >
-            <option value="">All Projects</option>
-            @foreach ($this->projects as $project)
-                <option value="{{ $project->id }}">{{ $project->name }}</option>
-            @endforeach
-        </select>
+    {{-- Header with Filter and New Button --}}
+    <div style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <label for="project-filter" style="font-size: 14px; font-weight: 500; color: #374151;">
+                Filter by Project:
+            </label>
+            <select
+                id="project-filter"
+                wire:model.live="projectId"
+                style="padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white;"
+            >
+                <option value="">All Projects</option>
+                @foreach ($this->projects as $project)
+                    <option value="{{ $project->id }}">{{ $project->name }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        {{-- New Button Dropdown --}}
+        <div x-data="{ open: false }" style="position: relative;">
+            <button
+                @click="open = !open"
+                @click.outside="open = false"
+                style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #2563eb; color: white; border-radius: 8px; font-size: 14px; font-weight: 500; border: none; cursor: pointer;"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 16px; height: 16px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+                New
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 12px; height: 12px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+            </button>
+            <div
+                x-show="open"
+                x-transition
+                style="position: absolute; right: 0; top: 100%; margin-top: 4px; background: white; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; min-width: 160px; z-index: 50;"
+            >
+                <button
+                    wire:click="mountAction('createTicket')"
+                    @click="open = false"
+                    style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
+                    onmouseover="this.style.background='#f3f4f6'"
+                    onmouseout="this.style.background='none'"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" />
+                    </svg>
+                    Ticket
+                </button>
+                <button
+                    wire:click="mountAction('createEpic')"
+                    @click="open = false"
+                    style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
+                    onmouseover="this.style.background='#f3f4f6'"
+                    onmouseout="this.style.background='none'"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                    </svg>
+                    Epic
+                </button>
+                <button
+                    wire:click="mountAction('createProject')"
+                    @click="open = false"
+                    style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
+                    onmouseover="this.style.background='#f3f4f6'"
+                    onmouseout="this.style.background='none'"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+                    </svg>
+                    Project
+                </button>
+            </div>
+        </div>
     </div>
 
     {{-- Kanban Board --}}
@@ -151,7 +487,9 @@ new class extends Component
                         <div
                             wire:key="ticket-{{ $ticket->id }}"
                             wire:sort:item="{{ $ticket->id }}"
-                            style="background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; padding: 12px; margin-bottom: 8px; cursor: grab;"
+                            wire:dblclick="openEditModal({{ $ticket->id }})"
+                            style="background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; padding: 12px; margin-bottom: 8px; cursor: grab; user-select: none;"
+                            title="Double-click to edit"
                         >
                             {{-- Ticket Header --}}
                             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
@@ -210,4 +548,7 @@ new class extends Component
             </div>
         @endforeach
     </div>
+
+    {{-- Filament Actions Modals --}}
+    <x-filament-actions::modals />
 </div>
