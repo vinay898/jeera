@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\LovType;
+use App\Filament\Actions\TicketActions;
 use App\Models\Epic;
 use App\Models\Lov;
 use App\Models\Project;
@@ -11,15 +12,12 @@ use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
-use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
@@ -40,6 +38,12 @@ new class extends Component implements HasActions, HasForms
 
     #[Url]
     public ?int $assigneeId = null;
+
+    #[Url]
+    public ?int $categoryId = null;
+
+    #[Url]
+    public ?int $labelId = null;
 
     public ?int $editingTicketId = null;
 
@@ -99,6 +103,18 @@ new class extends Component implements HasActions, HasForms
     }
 
     #[Computed]
+    public function categories(): Collection
+    {
+        return Lov::getForTeam(LovType::TicketCategory, $this->team->id);
+    }
+
+    #[Computed]
+    public function labels(): Collection
+    {
+        return Lov::getForTeam(LovType::TicketLabel, $this->team->id);
+    }
+
+    #[Computed]
     public function activeFilterCount(): int
     {
         $count = 0;
@@ -111,6 +127,12 @@ new class extends Component implements HasActions, HasForms
         if ($this->assigneeId) {
             $count++;
         }
+        if ($this->categoryId) {
+            $count++;
+        }
+        if ($this->labelId) {
+            $count++;
+        }
 
         return $count;
     }
@@ -118,7 +140,7 @@ new class extends Component implements HasActions, HasForms
     #[Computed]
     public function ticketsByStatus(): array
     {
-        $query = Ticket::with(['assignee', 'project', 'epic'])
+        $query = Ticket::with(['assignee', 'project', 'epic', 'categories', 'ticketLabels'])
             ->where('team_id', $this->team->id);
 
         if ($this->projectId) {
@@ -131,6 +153,14 @@ new class extends Component implements HasActions, HasForms
 
         if ($this->assigneeId) {
             $query->where('assignee_id', $this->assigneeId);
+        }
+
+        if ($this->categoryId) {
+            $query->whereHas('categories', fn ($q) => $q->where('lovs.id', $this->categoryId));
+        }
+
+        if ($this->labelId) {
+            $query->whereHas('ticketLabels', fn ($q) => $q->where('lovs.id', $this->labelId));
         }
 
         $tickets = $query->orderBy('priority')->get();
@@ -167,11 +197,23 @@ new class extends Component implements HasActions, HasForms
         unset($this->ticketsByStatus);
     }
 
+    public function updatedCategoryId(): void
+    {
+        unset($this->ticketsByStatus);
+    }
+
+    public function updatedLabelId(): void
+    {
+        unset($this->ticketsByStatus);
+    }
+
     public function clearFilters(): void
     {
         $this->projectId = null;
         $this->epicId = null;
         $this->assigneeId = null;
+        $this->categoryId = null;
+        $this->labelId = null;
         unset($this->epics);
         unset($this->ticketsByStatus);
     }
@@ -195,77 +237,12 @@ new class extends Component implements HasActions, HasForms
 
     public function createTicketAction(): Action
     {
-        $teamId = $this->team->id;
-
-        return Action::make('createTicket')
-            ->label('Ticket')
-            ->icon(Heroicon::OutlinedTicket)
-            ->modalHeading('Create Ticket')
-            ->modalWidth('4xl')
-            ->schema([
-                Section::make('Details')
-                    ->columns(2)
-                    ->schema([
-                        TextInput::make('title')
-                            ->required()
-                            ->maxLength(255)
-                            ->columnSpanFull(),
-                        Textarea::make('description')
-                            ->rows(3)
-                            ->columnSpanFull(),
-                        Select::make('project_id')
-                            ->label('Project')
-                            ->options(fn () => Project::where('team_id', $teamId)->pluck('name', 'id'))
-                            ->required()
-                            ->default($this->projectId)
-                            ->searchable(),
-                        Select::make('type')
-                            ->options(fn () => Lov::getOptions(LovType::TicketType, $teamId))
-                            ->default(fn () => Lov::getDefault(LovType::TicketType, $teamId)?->value ?? 'task')
-                            ->required(),
-                        Select::make('status')
-                            ->options(fn () => Lov::getOptions(LovType::TicketStatus, $teamId))
-                            ->default(fn () => Lov::getDefault(LovType::TicketStatus, $teamId)?->value ?? 'open')
-                            ->required(),
-                        Select::make('priority')
-                            ->options(fn () => Lov::getOptions(LovType::TicketPriority, $teamId))
-                            ->default(fn () => Lov::getDefault(LovType::TicketPriority, $teamId)?->value ?? 'medium')
-                            ->required(),
-                        Select::make('assignee_id')
-                            ->label('Assignee')
-                            ->options(fn () => $this->team->users()->pluck('name', 'users.id'))
-                            ->searchable(),
-                        TextInput::make('story_points')
-                            ->numeric()
-                            ->minValue(0)
-                            ->maxValue(100),
-                    ]),
-            ])
-            ->action(function (array $data): void {
-                $project = Project::find($data['project_id']);
-                $ticketCount = Ticket::where('project_id', $project->id)->count() + 1;
-
-                Ticket::create([
-                    'team_id' => $this->team->id,
-                    'project_id' => $data['project_id'],
-                    'key' => $project->key . '-' . $ticketCount,
-                    'title' => $data['title'],
-                    'description' => $data['description'] ?? null,
-                    'type' => $data['type'],
-                    'status' => $data['status'],
-                    'priority' => $data['priority'],
-                    'assignee_id' => $data['assignee_id'] ?? null,
-                    'reporter_id' => auth()->id(),
-                    'story_points' => $data['story_points'] ?? null,
-                ]);
-
+        return TicketActions::create(
+            $this->projectId,
+            function () {
                 unset($this->ticketsByStatus);
-
-                Notification::make()
-                    ->title('Ticket created')
-                    ->success()
-                    ->send();
-            });
+            }
+        );
     }
 
     public function createProjectAction(): Action
@@ -352,97 +329,13 @@ new class extends Component implements HasActions, HasForms
 
     public function editTicketAction(): Action
     {
-        $teamId = $this->team->id;
-
-        return Action::make('editTicket')
-            ->modalHeading(fn () => 'Edit Ticket')
-            ->modalWidth('4xl')
-            ->fillForm(function (): array {
-                $ticket = Ticket::find($this->editingTicketId);
-
-                return [
-                    'title' => $ticket->title,
-                    'description' => $ticket->description,
-                    'project_id' => $ticket->project_id,
-                    'type' => $ticket->type,
-                    'status' => $ticket->status,
-                    'priority' => $ticket->priority,
-                    'assignee_id' => $ticket->assignee_id,
-                    'story_points' => $ticket->story_points,
-                    'due_date' => $ticket->due_date,
-                    'labels' => $ticket->labels ?? [],
-                ];
-            })
-            ->schema([
-                Section::make('Details')
-                    ->columns(2)
-                    ->schema([
-                        TextInput::make('title')
-                            ->required()
-                            ->maxLength(255)
-                            ->columnSpanFull(),
-                        RichEditor::make('description')
-                            ->columnSpanFull()
-                            ->toolbarButtons([
-                                'bold',
-                                'italic',
-                                'bulletList',
-                                'orderedList',
-                                'link',
-                            ]),
-                        Select::make('project_id')
-                            ->label('Project')
-                            ->options(fn () => Project::where('team_id', $teamId)->pluck('name', 'id'))
-                            ->required()
-                            ->searchable(),
-                        Select::make('type')
-                            ->options(fn () => Lov::getOptions(LovType::TicketType, $teamId))
-                            ->required(),
-                        Select::make('status')
-                            ->options(fn () => Lov::getOptions(LovType::TicketStatus, $teamId))
-                            ->required(),
-                        Select::make('priority')
-                            ->options(fn () => Lov::getOptions(LovType::TicketPriority, $teamId))
-                            ->required(),
-                        Select::make('assignee_id')
-                            ->label('Assignee')
-                            ->options(fn () => $this->team->users()->pluck('name', 'users.id'))
-                            ->searchable(),
-                        TextInput::make('story_points')
-                            ->numeric()
-                            ->minValue(0)
-                            ->maxValue(100),
-                        DatePicker::make('due_date'),
-                        TagsInput::make('labels')
-                            ->placeholder('Add labels'),
-                    ]),
-            ])
-            ->action(function (array $data): void {
-                $ticket = Ticket::find($this->editingTicketId);
-                $ticket->update([
-                    'title' => $data['title'],
-                    'description' => $data['description'] ?? null,
-                    'project_id' => $data['project_id'],
-                    'type' => $data['type'],
-                    'status' => $data['status'],
-                    'priority' => $data['priority'],
-                    'assignee_id' => $data['assignee_id'] ?? null,
-                    'story_points' => $data['story_points'] ?? null,
-                    'due_date' => $data['due_date'] ?? null,
-                    'labels' => $data['labels'] ?? [],
-                ]);
-
+        return TicketActions::edit(
+            fn () => $this->editingTicketId,
+            function () {
                 unset($this->ticketsByStatus);
                 $this->editingTicketId = null;
-
-                Notification::make()
-                    ->title('Ticket updated')
-                    ->success()
-                    ->send();
-            })
-            ->after(function () {
-                $this->editingTicketId = null;
-            });
+            }
+        )->after(fn () => $this->editingTicketId = null);
     }
 
     public function getLovColor(string $color): string
@@ -540,6 +433,40 @@ new class extends Component implements HasActions, HasForms
                         <option value="">All Assignees</option>
                         @foreach ($this->teamUsers as $user)
                             <option value="{{ $user->id }}">{{ $user->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Category Filter --}}
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label for="category-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
+                        Category
+                    </label>
+                    <select
+                        id="category-filter"
+                        wire:model.live="categoryId"
+                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 140px; cursor: pointer;"
+                    >
+                        <option value="">All Categories</option>
+                        @foreach ($this->categories as $category)
+                            <option value="{{ $category->id }}">{{ $category->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Label Filter --}}
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label for="label-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
+                        Label
+                    </label>
+                    <select
+                        id="label-filter"
+                        wire:model.live="labelId"
+                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 140px; cursor: pointer;"
+                    >
+                        <option value="">All Labels</option>
+                        @foreach ($this->labels as $label)
+                            <option value="{{ $label->id }}">{{ $label->name }}</option>
                         @endforeach
                     </select>
                 </div>
