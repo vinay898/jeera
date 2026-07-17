@@ -137,7 +137,13 @@ new class extends Component implements HasActions, HasForms
 
         $grouped = [];
         foreach ($this->statuses as $status) {
-            $grouped[$status->value] = $tickets->where('status', $status->value)->values();
+            $grouped[$status->value] = $tickets->filter(function ($ticket) use ($status) {
+                $ticketStatus = $ticket->status instanceof \BackedEnum
+                    ? $ticket->status->value
+                    : $ticket->status;
+
+                return $ticketStatus === $status->value;
+            })->values();
         }
 
         return $grouped;
@@ -465,14 +471,18 @@ new class extends Component implements HasActions, HasForms
         };
     }
 
-    public function getTypeLov(string $value): ?Lov
+    public function getTypeLov(string|\BackedEnum $value): ?Lov
     {
-        return $this->types->firstWhere('value', $value);
+        $stringValue = $value instanceof \BackedEnum ? $value->value : $value;
+
+        return $this->types->firstWhere('value', $stringValue);
     }
 
-    public function getPriorityLov(string $value): ?Lov
+    public function getPriorityLov(string|\BackedEnum $value): ?Lov
     {
-        return $this->priorities->firstWhere('value', $value);
+        $stringValue = $value instanceof \BackedEnum ? $value->value : $value;
+
+        return $this->priorities->firstWhere('value', $stringValue);
     }
 };
 ?>
