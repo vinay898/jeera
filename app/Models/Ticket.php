@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\LovType;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
 use App\Enums\TicketType;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -155,5 +157,29 @@ class Ticket extends Model
     public function history(): HasMany
     {
         return $this->hasMany(TicketHistory::class);
+    }
+
+    /**
+     * Categories assigned to this ticket (from LOV).
+     *
+     * @return BelongsToMany<Lov, $this>
+     */
+    public function categories(): BelongsToMany
+    {
+        return $this->belongsToMany(Lov::class, 'category_ticket')
+            ->where('type', LovType::TicketCategory)
+            ->withTimestamps();
+    }
+
+    /**
+     * Labels assigned to this ticket (from LOV).
+     *
+     * @return BelongsToMany<Lov, $this>
+     */
+    public function ticketLabels(): BelongsToMany
+    {
+        return $this->belongsToMany(Lov::class, 'label_ticket')
+            ->where('type', LovType::TicketLabel)
+            ->withTimestamps();
     }
 }

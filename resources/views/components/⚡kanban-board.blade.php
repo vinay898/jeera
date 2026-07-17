@@ -1,11 +1,11 @@
 <?php
 
-use App\Enums\TicketPriority;
-use App\Enums\TicketStatus;
-use App\Enums\TicketType;
+use App\Enums\LovType;
 use App\Models\Epic;
+use App\Models\Lov;
 use App\Models\Project;
 use App\Models\Ticket;
+use App\Models\User;
 use Filament\Actions\Action;
 use Filament\Actions\Concerns\InteractsWithActions;
 use Filament\Actions\Contracts\HasActions;
@@ -21,7 +21,7 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Section;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Support\Collection;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\Url;
@@ -34,6 +34,12 @@ new class extends Component implements HasActions, HasForms
 
     #[Url]
     public ?int $projectId = null;
+
+    #[Url]
+    public ?int $epicId = null;
+
+    #[Url]
+    public ?int $assigneeId = null;
 
     public ?int $editingTicketId = null;
 
@@ -49,7 +55,7 @@ new class extends Component implements HasActions, HasForms
     }
 
     #[Computed]
-    public function projects(): Collection
+    public function projects(): \Illuminate\Support\Collection
     {
         return Project::where('team_id', $this->team->id)
             ->orderBy('name')
@@ -57,38 +63,119 @@ new class extends Component implements HasActions, HasForms
     }
 
     #[Computed]
-    public function statuses(): array
+    public function epics(): \Illuminate\Support\Collection
     {
-        return TicketStatus::cases();
+        $query = Epic::where('team_id', $this->team->id);
+
+        if ($this->projectId) {
+            $query->where('project_id', $this->projectId);
+        }
+
+        return $query->orderBy('title')->get();
+    }
+
+    #[Computed]
+    public function teamUsers(): \Illuminate\Support\Collection
+    {
+        return $this->team->users()->orderBy('name')->get();
+    }
+
+    #[Computed]
+    public function statuses(): Collection
+    {
+        return Lov::getForTeam(LovType::TicketStatus, $this->team->id);
+    }
+
+    #[Computed]
+    public function types(): Collection
+    {
+        return Lov::getForTeam(LovType::TicketType, $this->team->id);
+    }
+
+    #[Computed]
+    public function priorities(): Collection
+    {
+        return Lov::getForTeam(LovType::TicketPriority, $this->team->id);
+    }
+
+    #[Computed]
+    public function activeFilterCount(): int
+    {
+        $count = 0;
+        if ($this->projectId) {
+            $count++;
+        }
+        if ($this->epicId) {
+            $count++;
+        }
+        if ($this->assigneeId) {
+            $count++;
+        }
+
+        return $count;
     }
 
     #[Computed]
     public function ticketsByStatus(): array
     {
-        $query = Ticket::with(['assignee', 'project'])
+        $query = Ticket::with(['assignee', 'project', 'epic'])
             ->where('team_id', $this->team->id);
 
         if ($this->projectId) {
             $query->where('project_id', $this->projectId);
         }
 
+        if ($this->epicId) {
+            $query->where('epic_id', $this->epicId);
+        }
+
+        if ($this->assigneeId) {
+            $query->where('assignee_id', $this->assigneeId);
+        }
+
         $tickets = $query->orderBy('priority')->get();
 
         $grouped = [];
-        foreach (TicketStatus::cases() as $status) {
-            $grouped[$status->value] = $tickets->where('status', $status)->values();
+        foreach ($this->statuses as $status) {
+            $grouped[$status->value] = $tickets->where('status', $status->value)->values();
         }
 
         return $grouped;
     }
 
+    public function updatedProjectId(): void
+    {
+        // Reset epic filter when project changes
+        $this->epicId = null;
+        unset($this->epics);
+        unset($this->ticketsByStatus);
+    }
+
+    public function updatedEpicId(): void
+    {
+        unset($this->ticketsByStatus);
+    }
+
+    public function updatedAssigneeId(): void
+    {
+        unset($this->ticketsByStatus);
+    }
+
+    public function clearFilters(): void
+    {
+        $this->projectId = null;
+        $this->epicId = null;
+        $this->assigneeId = null;
+        unset($this->epics);
+        unset($this->ticketsByStatus);
+    }
+
     public function handleSort(int $ticketId, int $position, string $statusValue): void
     {
         $ticket = Ticket::where('team_id', $this->team->id)->findOrFail($ticketId);
-        $newStatus = TicketStatus::from($statusValue);
 
         $ticket->update([
-            'status' => $newStatus,
+            'status' => $statusValue,
         ]);
 
         unset($this->ticketsByStatus);
@@ -102,6 +189,8 @@ new class extends Component implements HasActions, HasForms
 
     public function createTicketAction(): Action
     {
+        $teamId = $this->team->id;
+
         return Action::make('createTicket')
             ->label('Ticket')
             ->icon(Heroicon::OutlinedTicket)
@@ -120,21 +209,21 @@ new class extends Component implements HasActions, HasForms
                             ->columnSpanFull(),
                         Select::make('project_id')
                             ->label('Project')
-                            ->options(fn () => Project::where('team_id', $this->team->id)->pluck('name', 'id'))
+                            ->options(fn () => Project::where('team_id', $teamId)->pluck('name', 'id'))
                             ->required()
                             ->default($this->projectId)
                             ->searchable(),
                         Select::make('type')
-                            ->options(TicketType::class)
-                            ->default(TicketType::Task)
+                            ->options(fn () => Lov::getOptions(LovType::TicketType, $teamId))
+                            ->default(fn () => Lov::getDefault(LovType::TicketType, $teamId)?->value ?? 'task')
                             ->required(),
                         Select::make('status')
-                            ->options(TicketStatus::class)
-                            ->default(TicketStatus::Open)
+                            ->options(fn () => Lov::getOptions(LovType::TicketStatus, $teamId))
+                            ->default(fn () => Lov::getDefault(LovType::TicketStatus, $teamId)?->value ?? 'open')
                             ->required(),
                         Select::make('priority')
-                            ->options(TicketPriority::class)
-                            ->default(TicketPriority::Medium)
+                            ->options(fn () => Lov::getOptions(LovType::TicketPriority, $teamId))
+                            ->default(fn () => Lov::getDefault(LovType::TicketPriority, $teamId)?->value ?? 'medium')
                             ->required(),
                         Select::make('assignee_id')
                             ->label('Assignee')
@@ -246,6 +335,8 @@ new class extends Component implements HasActions, HasForms
                     'end_date' => $data['end_date'] ?? null,
                 ]);
 
+                unset($this->epics);
+
                 Notification::make()
                     ->title('Epic created')
                     ->success()
@@ -255,6 +346,8 @@ new class extends Component implements HasActions, HasForms
 
     public function editTicketAction(): Action
     {
+        $teamId = $this->team->id;
+
         return Action::make('editTicket')
             ->modalHeading(fn () => 'Edit Ticket')
             ->modalWidth('4xl')
@@ -293,17 +386,17 @@ new class extends Component implements HasActions, HasForms
                             ]),
                         Select::make('project_id')
                             ->label('Project')
-                            ->options(fn () => Project::where('team_id', $this->team->id)->pluck('name', 'id'))
+                            ->options(fn () => Project::where('team_id', $teamId)->pluck('name', 'id'))
                             ->required()
                             ->searchable(),
                         Select::make('type')
-                            ->options(TicketType::class)
+                            ->options(fn () => Lov::getOptions(LovType::TicketType, $teamId))
                             ->required(),
                         Select::make('status')
-                            ->options(TicketStatus::class)
+                            ->options(fn () => Lov::getOptions(LovType::TicketStatus, $teamId))
                             ->required(),
                         Select::make('priority')
-                            ->options(TicketPriority::class)
+                            ->options(fn () => Lov::getOptions(LovType::TicketPriority, $teamId))
                             ->required(),
                         Select::make('assignee_id')
                             ->label('Assignee')
@@ -346,116 +439,175 @@ new class extends Component implements HasActions, HasForms
             });
     }
 
-    public function getStatusHeaderColor(TicketStatus $status): string
-    {
-        return match ($status) {
-            TicketStatus::Open => '#e5e7eb',
-            TicketStatus::InProgress => '#dbeafe',
-            TicketStatus::InReview => '#fef3c7',
-            TicketStatus::Testing => '#ede9fe',
-            TicketStatus::Done => '#d1fae5',
-            TicketStatus::Closed => '#f3f4f6',
-        };
-    }
-
-    public function getTypeColor(string $color): string
+    public function getLovColor(string $color): string
     {
         return match ($color) {
             'danger' => '#dc2626',
             'success' => '#16a34a',
             'info' => '#2563eb',
             'warning' => '#d97706',
+            'purple' => '#9333ea',
+            'pink' => '#db2777',
             default => '#6b7280',
         };
     }
 
-    public function getPriorityColor(string $color): string
+    public function getStatusHeaderBgColor(string $color): string
     {
         return match ($color) {
-            'danger' => '#ef4444',
-            'warning' => '#f59e0b',
-            'info' => '#3b82f6',
-            default => '#9ca3af',
+            'danger' => '#fee2e2',
+            'success' => '#d1fae5',
+            'info' => '#dbeafe',
+            'warning' => '#fef3c7',
+            'purple' => '#ede9fe',
+            'pink' => '#fce7f3',
+            default => '#e5e7eb',
         };
+    }
+
+    public function getTypeLov(string $value): ?Lov
+    {
+        return $this->types->firstWhere('value', $value);
+    }
+
+    public function getPriorityLov(string $value): ?Lov
+    {
+        return $this->priorities->firstWhere('value', $value);
     }
 };
 ?>
 
 <div>
-    {{-- Header with Filter and New Button --}}
-    <div style="margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;">
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <label for="project-filter" style="font-size: 14px; font-weight: 500; color: #374151;">
-                Filter by Project:
-            </label>
-            <select
-                id="project-filter"
-                wire:model.live="projectId"
-                style="padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white;"
-            >
-                <option value="">All Projects</option>
-                @foreach ($this->projects as $project)
-                    <option value="{{ $project->id }}">{{ $project->name }}</option>
-                @endforeach
-            </select>
-        </div>
+    {{-- Filter Bar --}}
+    <div style="margin-bottom: 16px; padding: 16px; background: white; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+            {{-- Filters --}}
+            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                {{-- Project Filter --}}
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label for="project-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
+                        Project
+                    </label>
+                    <select
+                        id="project-filter"
+                        wire:model.live="projectId"
+                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
+                    >
+                        <option value="">All Projects</option>
+                        @foreach ($this->projects as $project)
+                            <option value="{{ $project->id }}">{{ $project->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
 
-        {{-- New Button Dropdown --}}
-        <div x-data="{ open: false }" style="position: relative;">
-            <button
-                @click="open = !open"
-                @click.outside="open = false"
-                style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #2563eb; color: white; border-radius: 8px; font-size: 14px; font-weight: 500; border: none; cursor: pointer;"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 16px; height: 16px;">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                New
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 12px; height: 12px;">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                </svg>
-            </button>
-            <div
-                x-show="open"
-                x-transition
-                style="position: absolute; right: 0; top: 100%; margin-top: 4px; background: white; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; min-width: 160px; z-index: 50;"
-            >
+                {{-- Epic Filter --}}
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label for="epic-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
+                        Epic
+                    </label>
+                    <select
+                        id="epic-filter"
+                        wire:model.live="epicId"
+                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
+                    >
+                        <option value="">All Epics</option>
+                        @foreach ($this->epics as $epic)
+                            <option value="{{ $epic->id }}">{{ $epic->title }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Assignee Filter --}}
+                <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <label for="assignee-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
+                        Assignee
+                    </label>
+                    <select
+                        id="assignee-filter"
+                        wire:model.live="assigneeId"
+                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
+                    >
+                        <option value="">All Assignees</option>
+                        @foreach ($this->teamUsers as $user)
+                            <option value="{{ $user->id }}">{{ $user->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+
+                {{-- Clear Filters --}}
+                @if ($this->activeFilterCount > 0)
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <span style="font-size: 11px; font-weight: 600; color: transparent;">Clear</span>
+                        <button
+                            wire:click="clearFilters"
+                            style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; background: #fee2e2; color: #dc2626; border-radius: 8px; font-size: 13px; font-weight: 500; border: none; cursor: pointer;"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 14px; height: 14px;">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                            Clear ({{ $this->activeFilterCount }})
+                        </button>
+                    </div>
+                @endif
+            </div>
+
+            {{-- New Button Dropdown --}}
+            <div x-data="{ open: false }" style="position: relative;">
                 <button
-                    wire:click="mountAction('createTicket')"
-                    @click="open = false"
-                    style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
-                    onmouseover="this.style.background='#f3f4f6'"
-                    onmouseout="this.style.background='none'"
+                    @click="open = !open"
+                    @click.outside="open = false"
+                    style="display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; background: #2563eb; color: white; border-radius: 8px; font-size: 14px; font-weight: 500; border: none; cursor: pointer;"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" />
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 16px; height: 16px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
-                    Ticket
+                    New
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 12px; height: 12px;">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                    </svg>
                 </button>
-                <button
-                    wire:click="mountAction('createEpic')"
-                    @click="open = false"
-                    style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
-                    onmouseover="this.style.background='#f3f4f6'"
-                    onmouseout="this.style.background='none'"
+                <div
+                    x-show="open"
+                    x-transition
+                    style="position: absolute; right: 0; top: 100%; margin-top: 4px; background: white; border-radius: 8px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; min-width: 160px; z-index: 50;"
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
-                    </svg>
-                    Epic
-                </button>
-                <button
-                    wire:click="mountAction('createProject')"
-                    @click="open = false"
-                    style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
-                    onmouseover="this.style.background='#f3f4f6'"
-                    onmouseout="this.style.background='none'"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
-                    </svg>
-                    Project
-                </button>
+                    <button
+                        wire:click="mountAction('createTicket')"
+                        @click="open = false"
+                        style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
+                        onmouseover="this.style.background='#f3f4f6'"
+                        onmouseout="this.style.background='none'"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 0 1 0 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 0 1 0-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375Z" />
+                        </svg>
+                        Ticket
+                    </button>
+                    <button
+                        wire:click="mountAction('createEpic')"
+                        @click="open = false"
+                        style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
+                        onmouseover="this.style.background='#f3f4f6'"
+                        onmouseout="this.style.background='none'"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                        </svg>
+                        Epic
+                    </button>
+                    <button
+                        wire:click="mountAction('createProject')"
+                        @click="open = false"
+                        style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 16px; font-size: 14px; text-align: left; border: none; background: none; cursor: pointer; color: #374151;"
+                        onmouseover="this.style.background='#f3f4f6'"
+                        onmouseout="this.style.background='none'"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 18px; height: 18px; color: #6b7280;">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 0 1 4.5 9.75h15A2.25 2.25 0 0 1 21.75 12v.75m-8.69-6.44-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z" />
+                        </svg>
+                        Project
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -465,13 +617,21 @@ new class extends Component implements HasActions, HasForms
         @foreach ($this->statuses as $status)
             <div style="flex-shrink: 0; width: 280px;">
                 {{-- Column Header --}}
-                <div style="background: {{ $this->getStatusHeaderColor($status) }}; border-radius: 8px 8px 0 0; padding: 12px; border: 1px solid #e5e7eb; border-bottom: none;">
+                <div style="background: {{ $this->getStatusHeaderBgColor($status->color ?? 'gray') }}; border-radius: 8px 8px 0 0; padding: 12px; border: 1px solid #e5e7eb; border-bottom: none;">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <h3 style="font-weight: 600; font-size: 14px; color: #111827; margin: 0;">
-                            {{ $status->label() }}
-                        </h3>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            @if ($status->icon)
+                                <x-filament::icon
+                                    :icon="$status->icon"
+                                    style="width: 16px; height: 16px; color: {{ $this->getLovColor($status->color ?? 'gray') }};"
+                                />
+                            @endif
+                            <h3 style="font-weight: 600; font-size: 14px; color: #111827; margin: 0;">
+                                {{ $status->name }}
+                            </h3>
+                        </div>
                         <span style="background: white; padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 500; color: #6b7280;">
-                            {{ count($this->ticketsByStatus[$status->value]) }}
+                            {{ count($this->ticketsByStatus[$status->value] ?? []) }}
                         </span>
                     </div>
                 </div>
@@ -483,7 +643,11 @@ new class extends Component implements HasActions, HasForms
                     wire:sort:group-id="{{ $status->value }}"
                     style="background: #f9fafb; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none; padding: 8px; min-height: 400px;"
                 >
-                    @forelse ($this->ticketsByStatus[$status->value] as $ticket)
+                    @forelse ($this->ticketsByStatus[$status->value] ?? [] as $ticket)
+                        @php
+                            $typeLov = $this->getTypeLov($ticket->type);
+                            $priorityLov = $this->getPriorityLov($ticket->priority);
+                        @endphp
                         <div
                             wire:key="ticket-{{ $ticket->id }}"
                             wire:sort:item="{{ $ticket->id }}"
@@ -494,18 +658,22 @@ new class extends Component implements HasActions, HasForms
                             {{-- Ticket Header --}}
                             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
                                 <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
-                                    <x-filament::icon
-                                        :icon="$ticket->type->icon()"
-                                        style="width: 16px; height: 16px; color: {{ $this->getTypeColor($ticket->type->color()) }};"
-                                    />
+                                    @if ($typeLov?->icon)
+                                        <x-filament::icon
+                                            :icon="$typeLov->icon"
+                                            style="width: 16px; height: 16px; color: {{ $this->getLovColor($typeLov->color ?? 'gray') }};"
+                                        />
+                                    @endif
                                     <span style="font-size: 12px; font-weight: 500; color: #6b7280;">
                                         {{ $ticket->key }}
                                     </span>
                                 </div>
-                                <x-filament::icon
-                                    :icon="$ticket->priority->icon()"
-                                    style="width: 16px; height: 16px; flex-shrink: 0; color: {{ $this->getPriorityColor($ticket->priority->color()) }};"
-                                />
+                                @if ($priorityLov?->icon)
+                                    <x-filament::icon
+                                        :icon="$priorityLov->icon"
+                                        style="width: 16px; height: 16px; flex-shrink: 0; color: {{ $this->getLovColor($priorityLov->color ?? 'gray') }};"
+                                    />
+                                @endif
                             </div>
 
                             {{-- Ticket Title --}}
@@ -513,19 +681,31 @@ new class extends Component implements HasActions, HasForms
                                 {{ $ticket->title }}
                             </p>
 
+                            {{-- Epic Badge --}}
+                            @if ($ticket->epic)
+                                <div style="margin-bottom: 8px;">
+                                    <span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; background: #fef3c7; color: #92400e;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width: 10px; height: 10px;">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="m3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75Z" />
+                                        </svg>
+                                        {{ Str::limit($ticket->epic->title, 20) }}
+                                    </span>
+                                </div>
+                            @endif
+
                             {{-- Ticket Footer --}}
                             <div style="display: flex; align-items: center; justify-content: space-between;">
                                 <span style="font-size: 11px; color: #6b7280; font-weight: 500;">
                                     {{ $ticket->project?->key ?? 'No Project' }}
                                 </span>
                                 @if ($ticket->assignee)
-                                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #dbeafe; display: flex; align-items: center; justify-content: center;">
+                                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #dbeafe; display: flex; align-items: center; justify-content: center;" title="{{ $ticket->assignee->name }}">
                                         <span style="font-size: 10px; font-weight: 600; color: #1d4ed8;">
                                             {{ $ticket->assignee->initials() }}
                                         </span>
                                     </div>
                                 @else
-                                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center;">
+                                    <div style="width: 24px; height: 24px; border-radius: 50%; background: #f3f4f6; display: flex; align-items: center; justify-content: center;" title="Unassigned">
                                         <x-filament::icon icon="heroicon-o-user" style="width: 12px; height: 12px; color: #9ca3af;" />
                                     </div>
                                 @endif

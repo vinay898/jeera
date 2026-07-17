@@ -14,9 +14,9 @@ class KanbanBoard extends Page
 
     protected static ?int $navigationSort = 2;
 
-    protected static ?string $navigationLabel = 'Kanban Board';
+    protected static ?string $navigationLabel = 'Work Board';
 
-    protected static ?string $title = 'Kanban Board';
+    protected static ?string $title = 'Work Board';
 
     protected static ?string $slug = 'kanban';
 

@@ -2,13 +2,11 @@
 
 namespace App\Filament\Resources\Tickets\Schemas;
 
-use App\Enums\TicketPriority;
-use App\Enums\TicketStatus;
-use App\Enums\TicketType;
+use App\Enums\LovType;
+use App\Models\Lov;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -75,17 +73,59 @@ class TicketForm
                                     ->preload()
                                     ->live(),
                                 Select::make('type')
-                                    ->options(TicketType::class)
-                                    ->default(TicketType::Task)
-                                    ->required(),
+                                    ->options(fn () => Lov::query()
+                                        ->ofType(LovType::TicketType)
+                                        ->active()
+                                        ->ordered()
+                                        ->pluck('name', 'value'))
+                                    ->default('task')
+                                    ->required()
+                                    ->native(false),
                                 Select::make('status')
-                                    ->options(TicketStatus::class)
-                                    ->default(TicketStatus::Open)
-                                    ->required(),
+                                    ->options(fn () => Lov::query()
+                                        ->ofType(LovType::TicketStatus)
+                                        ->active()
+                                        ->ordered()
+                                        ->pluck('name', 'value'))
+                                    ->default('open')
+                                    ->required()
+                                    ->native(false),
                                 Select::make('priority')
-                                    ->options(TicketPriority::class)
-                                    ->default(TicketPriority::Medium)
-                                    ->required(),
+                                    ->options(fn () => Lov::query()
+                                        ->ofType(LovType::TicketPriority)
+                                        ->active()
+                                        ->ordered()
+                                        ->pluck('name', 'value'))
+                                    ->default('medium')
+                                    ->required()
+                                    ->native(false),
+                                Select::make('categories')
+                                    ->relationship(
+                                        name: 'categories',
+                                        titleAttribute: 'name',
+                                        modifyQueryUsing: fn ($query) => $query
+                                            ->where('type', LovType::TicketCategory)
+                                            ->active()
+                                            ->ordered()
+                                    )
+                                    ->multiple()
+                                    ->preload()
+                                    ->native(false)
+                                    ->placeholder('Select categories'),
+                                Select::make('ticketLabels')
+                                    ->relationship(
+                                        name: 'ticketLabels',
+                                        titleAttribute: 'name',
+                                        modifyQueryUsing: fn ($query) => $query
+                                            ->where('type', LovType::TicketLabel)
+                                            ->active()
+                                            ->ordered()
+                                    )
+                                    ->multiple()
+                                    ->preload()
+                                    ->native(false)
+                                    ->label('Labels')
+                                    ->placeholder('Select labels'),
                             ]),
                         Section::make('People')
                             ->schema([
@@ -123,12 +163,6 @@ class TicketForm
                                     ->minValue(0)
                                     ->maxValue(100),
                                 DatePicker::make('due_date'),
-                            ]),
-                        Section::make('Labels')
-                            ->collapsed()
-                            ->schema([
-                                TagsInput::make('labels')
-                                    ->placeholder('Add labels'),
                             ]),
                     ]),
             ]);
