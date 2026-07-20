@@ -232,27 +232,39 @@ class TicketForm
                             ->ofType(LovType::TicketType)
                             ->active()
                             ->ordered()
-                            ->pluck('name', 'value'))
+                            ->get()
+                            ->mapWithKeys(fn ($lov) => [
+                                $lov->value => view('components.lov-option', ['lov' => $lov])->render(),
+                            ]))
                         ->default('task')
                         ->required()
+                        ->allowHtml()
                         ->native(false),
                     Select::make('status')
                         ->options(fn () => Lov::query()
                             ->ofType(LovType::TicketStatus)
                             ->active()
                             ->ordered()
-                            ->pluck('name', 'value'))
+                            ->get()
+                            ->mapWithKeys(fn ($lov) => [
+                                $lov->value => view('components.lov-option', ['lov' => $lov])->render(),
+                            ]))
                         ->default('open')
                         ->required()
+                        ->allowHtml()
                         ->native(false),
                     Select::make('priority')
                         ->options(fn () => Lov::query()
                             ->ofType(LovType::TicketPriority)
                             ->active()
                             ->ordered()
-                            ->pluck('name', 'value'))
+                            ->get()
+                            ->mapWithKeys(fn ($lov) => [
+                                $lov->value => view('components.lov-option', ['lov' => $lov])->render(),
+                            ]))
                         ->default('medium')
                         ->required()
+                        ->allowHtml()
                         ->native(false),
                 ]),
 
@@ -303,9 +315,13 @@ class TicketForm
                             ->ofType(LovType::TicketCategory)
                             ->active()
                             ->ordered()
-                            ->pluck('name', 'id'))
+                            ->get()
+                            ->mapWithKeys(fn ($lov) => [
+                                $lov->id => view('components.lov-option', ['lov' => $lov])->render(),
+                            ]))
                         ->multiple()
                         ->preload()
+                        ->allowHtml()
                         ->native(false)
                         ->placeholder('Select categories'),
                     Select::make('ticketLabels')
@@ -314,9 +330,13 @@ class TicketForm
                             ->ofType(LovType::TicketLabel)
                             ->active()
                             ->ordered()
-                            ->pluck('name', 'id'))
+                            ->get()
+                            ->mapWithKeys(fn ($lov) => [
+                                $lov->id => view('components.lov-option', ['lov' => $lov])->render(),
+                            ]))
                         ->multiple()
                         ->preload()
+                        ->allowHtml()
                         ->native(false)
                         ->placeholder('Select labels'),
                 ]),
