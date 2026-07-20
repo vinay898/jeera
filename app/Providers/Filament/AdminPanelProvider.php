@@ -11,6 +11,7 @@ use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Facades\FilamentColor;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
@@ -18,10 +19,42 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
 {
+    public function boot(): void
+    {
+        // Register dynamic colors based on user's accent_color preference
+        // Using a callback so it's evaluated at render time when user is available
+        FilamentColor::register(fn () => $this->getUserAccentColors());
+    }
+
+    /**
+     * Get the accent color palette based on user settings.
+     *
+     * @return array<string, array<int, string>|string>
+     */
+    protected function getUserAccentColors(): array
+    {
+        $user = auth()->user();
+        $accentColor = $user?->getSetting('accent_color', 'blue') ?? 'blue';
+
+        $colorMap = [
+            'blue' => Color::Blue,
+            'green' => Color::Green,
+            'purple' => Color::Purple,
+            'amber' => Color::Amber,
+            'rose' => Color::Rose,
+            'cyan' => Color::Cyan,
+        ];
+
+        return [
+            'primary' => $colorMap[$accentColor] ?? Color::Blue,
+        ];
+    }
+
     public function panel(Panel $panel): Panel
     {
         return $panel
@@ -31,9 +64,10 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->registration()
             ->tenant(Team::class, slugAttribute: 'slug')
-            ->colors([
-                'primary' => Color::Blue,
-            ])
+            ->renderHook(
+                'panels::head.end',
+                fn () => auth()->check() ? Blade::render('<x-settings-styles />') : ''
+            )
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

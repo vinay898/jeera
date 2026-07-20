@@ -51,7 +51,11 @@ class TicketForm
                                 ->columnSpanFull(),
                             RichEditor::make('description')
                                 ->columnSpanFull()
+                                ->fileAttachmentsDisk('public')
+                                ->fileAttachmentsDirectory('ticket-descriptions')
+                                ->resizableImages()
                                 ->toolbarButtons([
+                                    'attachFiles',
                                     'bold',
                                     'italic',
                                     'underline',
@@ -208,7 +212,11 @@ class TicketForm
             RichEditor::make('description')
                 ->columnSpanFull()
                 ->extraInputAttributes(['style' => 'min-height: 100px'])
+                ->fileAttachmentsDisk('public')
+                ->fileAttachmentsDirectory('ticket-descriptions')
+                ->resizableImages()
                 ->toolbarButtons([
+                    'attachFiles',
                     'bold',
                     'italic',
                     'bulletList',

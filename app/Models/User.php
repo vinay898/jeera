@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -117,5 +118,38 @@ class User extends Authenticatable implements FilamentUser, HasTenants
     public function timeLogs(): HasMany
     {
         return $this->hasMany(TimeLog::class);
+    }
+
+    /**
+     * @return HasOne<UserSetting, $this>
+     */
+    public function setting(): HasOne
+    {
+        return $this->hasOne(UserSetting::class);
+    }
+
+    /**
+     * Get a user setting value with optional default.
+     */
+    public function getSetting(string $key, mixed $default = null): mixed
+    {
+        $setting = $this->setting;
+
+        if (! $setting) {
+            return $default;
+        }
+
+        return $setting->{$key} ?? $default;
+    }
+
+    /**
+     * Get all user settings, creating defaults if none exist.
+     */
+    public function getSettings(): UserSetting
+    {
+        return $this->setting ?? UserSetting::firstOrCreate(
+            ['user_id' => $this->id],
+            []
+        );
     }
 }
