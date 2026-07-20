@@ -25,7 +25,7 @@ class TicketActions
     {
         return Action::make('editTicket')
             ->modalHeading('Edit Ticket')
-            ->modalWidth('5xl')
+            ->modalWidth('4xl')
             ->fillForm(function () use ($getTicketId): array {
                 $ticket = Ticket::with(['categories', 'ticketLabels'])->find($getTicketId());
 
@@ -55,19 +55,7 @@ class TicketActions
                 ];
             })
             ->schema(TicketForm::getComponents())
-            ->modalContentFooter(function () use ($getTicketId) {
-                $ticketId = $getTicketId();
-                if (! $ticketId) {
-                    return null;
-                }
-
-                $ticket = Ticket::find($ticketId);
-                if (! $ticket) {
-                    return null;
-                }
-
-                return view('filament.ticket-attachments-embed', ['ticket' => $ticket]);
-            })
+            ->modalSubmitActionLabel('Save Changes')
             ->action(function (array $data) use ($getTicketId, $afterSave): void {
                 $ticket = Ticket::find($getTicketId());
 
@@ -132,7 +120,7 @@ class TicketActions
             ->label('Ticket')
             ->icon(Heroicon::OutlinedTicket)
             ->modalHeading('Create Ticket')
-            ->modalWidth('5xl')
+            ->modalWidth('4xl')
             ->fillForm(function () use ($defaultProjectId): array {
                 return [
                     'project_id' => $defaultProjectId,
@@ -140,6 +128,7 @@ class TicketActions
                 ];
             })
             ->schema(TicketForm::getComponents())
+            ->modalSubmitActionLabel('Create Ticket')
             ->action(function (array $data) use ($afterSave): void {
                 $team = Filament::getTenant();
                 $project = Project::find($data['project_id']);
@@ -192,6 +181,85 @@ class TicketActions
 
                 Notification::make()
                     ->title('Ticket created')
+                    ->success()
+                    ->send();
+            });
+    }
+
+    /**
+     * Create a table edit action for Filament resource tables.
+     *
+     * @param  Closure(): void  $afterSave  Callback to run after saving
+     */
+    public static function tableEdit(?Closure $afterSave = null): Action
+    {
+        return Action::make('editTicket')
+            ->label('Edit')
+            ->icon(Heroicon::OutlinedPencilSquare)
+            ->modalHeading('Edit Ticket')
+            ->modalWidth('4xl')
+            ->fillForm(function (Ticket $record): array {
+                $ticket = $record->load(['categories', 'ticketLabels']);
+
+                return [
+                    'title' => $ticket->title,
+                    'description' => $ticket->description,
+                    'project_id' => $ticket->project_id,
+                    'type' => $ticket->type instanceof \BackedEnum ? $ticket->type->value : $ticket->type,
+                    'status' => $ticket->status instanceof \BackedEnum ? $ticket->status->value : $ticket->status,
+                    'priority' => $ticket->priority instanceof \BackedEnum ? $ticket->priority->value : $ticket->priority,
+                    'assignee_id' => $ticket->assignee_id,
+                    'reporter_id' => $ticket->reporter_id,
+                    'epic_id' => $ticket->epic_id,
+                    'sprint_id' => $ticket->sprint_id,
+                    'parent_id' => $ticket->parent_id,
+                    'story_points' => $ticket->story_points,
+                    'original_estimate' => $ticket->original_estimate,
+                    'time_spent' => $ticket->time_spent,
+                    'time_remaining' => $ticket->time_remaining,
+                    'due_date' => $ticket->due_date,
+                    'categories' => $ticket->categories->pluck('id')->toArray(),
+                    'ticketLabels' => $ticket->ticketLabels->pluck('id')->toArray(),
+                ];
+            })
+            ->schema(TicketForm::getComponents())
+            ->modalSubmitActionLabel('Save Changes')
+            ->action(function (array $data, Ticket $record) use ($afterSave): void {
+                $record->update([
+                    'title' => $data['title'],
+                    'description' => $data['description'] ?? null,
+                    'project_id' => $data['project_id'],
+                    'type' => $data['type'],
+                    'status' => $data['status'],
+                    'priority' => $data['priority'],
+                    'assignee_id' => $data['assignee_id'] ?? null,
+                    'reporter_id' => $data['reporter_id'] ?? null,
+                    'epic_id' => $data['epic_id'] ?? null,
+                    'sprint_id' => $data['sprint_id'] ?? null,
+                    'parent_id' => $data['parent_id'] ?? null,
+                    'story_points' => $data['story_points'] ?? null,
+                    'original_estimate' => $data['original_estimate'] ?? null,
+                    'time_spent' => $data['time_spent'] ?? null,
+                    'time_remaining' => $data['time_remaining'] ?? null,
+                    'due_date' => $data['due_date'] ?? null,
+                ]);
+
+                // Sync categories
+                if (isset($data['categories'])) {
+                    $record->categories()->sync($data['categories']);
+                }
+
+                // Sync labels
+                if (isset($data['ticketLabels'])) {
+                    $record->ticketLabels()->sync($data['ticketLabels']);
+                }
+
+                if ($afterSave) {
+                    $afterSave();
+                }
+
+                Notification::make()
+                    ->title('Ticket updated')
                     ->success()
                     ->send();
             });

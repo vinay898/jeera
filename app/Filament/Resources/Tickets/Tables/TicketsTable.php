@@ -5,9 +5,9 @@ namespace App\Filament\Resources\Tickets\Tables;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
 use App\Enums\TicketType;
+use App\Filament\Actions\TicketActions;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Actions\ViewAction;
@@ -92,7 +92,7 @@ class TicketsTable
             ])
             ->recordActions([
                 ViewAction::make(),
-                EditAction::make(),
+                TicketActions::tableEdit(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

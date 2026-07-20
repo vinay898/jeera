@@ -14,6 +14,7 @@ use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -189,169 +190,177 @@ class TicketForm
 
     /**
      * Get form components for standalone action modals (uses explicit options).
+     * Optimized for compact, scannable layout.
      *
      * @return array<int, Component>
      */
     public static function getComponents(): array
     {
         return [
-            Grid::make(2)
-                ->columnSpan(2)
-                ->schema([
-                    Section::make('Ticket Details')
-                        ->columnSpanFull()
-                        ->schema([
-                            TextInput::make('title')
-                                ->required()
-                                ->maxLength(255)
-                                ->columnSpanFull(),
-                            RichEditor::make('description')
-                                ->columnSpanFull()
-                                ->toolbarButtons([
-                                    'bold',
-                                    'italic',
-                                    'underline',
-                                    'strike',
-                                    'bulletList',
-                                    'orderedList',
-                                    'link',
-                                    'codeBlock',
-                                ]),
-                        ]),
-                    Section::make('Time Tracking')
-                        ->columns(3)
-                        ->collapsed()
-                        ->schema([
-                            TextInput::make('original_estimate')
-                                ->numeric()
-                                ->suffix('minutes')
-                                ->label('Original Estimate'),
-                            TextInput::make('time_spent')
-                                ->numeric()
-                                ->suffix('minutes')
-                                ->default(0)
-                                ->label('Time Spent'),
-                            TextInput::make('time_remaining')
-                                ->numeric()
-                                ->suffix('minutes')
-                                ->label('Time Remaining'),
-                        ]),
+            // Title - full width, prominent
+            TextInput::make('title')
+                ->required()
+                ->maxLength(255)
+                ->columnSpanFull()
+                ->placeholder('What needs to be done?'),
+
+            // Description - full width, visible height
+            RichEditor::make('description')
+                ->columnSpanFull()
+                ->extraInputAttributes(['style' => 'min-height: 100px'])
+                ->toolbarButtons([
+                    'bold',
+                    'italic',
+                    'bulletList',
+                    'orderedList',
+                    'link',
                 ]),
-            Grid::make(1)
-                ->columnSpan(1)
+
+            // Core fields - 4 columns
+            Grid::make(4)
                 ->schema([
-                    Section::make('Classification')
-                        ->schema([
-                            Select::make('project_id')
-                                ->label('Project')
-                                ->options(fn () => Project::query()
-                                    ->where('team_id', Filament::getTenant()?->id)
-                                    ->pluck('name', 'id'))
-                                ->required()
-                                ->searchable()
-                                ->preload()
-                                ->live(),
-                            Select::make('type')
-                                ->options(fn () => Lov::query()
-                                    ->ofType(LovType::TicketType)
-                                    ->active()
-                                    ->ordered()
-                                    ->pluck('name', 'value'))
-                                ->default('task')
-                                ->required()
-                                ->native(false),
-                            Select::make('status')
-                                ->options(fn () => Lov::query()
-                                    ->ofType(LovType::TicketStatus)
-                                    ->active()
-                                    ->ordered()
-                                    ->pluck('name', 'value'))
-                                ->default('open')
-                                ->required()
-                                ->native(false),
-                            Select::make('priority')
-                                ->options(fn () => Lov::query()
-                                    ->ofType(LovType::TicketPriority)
-                                    ->active()
-                                    ->ordered()
-                                    ->pluck('name', 'value'))
-                                ->default('medium')
-                                ->required()
-                                ->native(false),
-                            Select::make('categories')
-                                ->label('Categories')
-                                ->options(fn () => Lov::query()
-                                    ->ofType(LovType::TicketCategory)
-                                    ->active()
-                                    ->ordered()
-                                    ->pluck('name', 'id'))
-                                ->multiple()
-                                ->preload()
-                                ->native(false)
-                                ->placeholder('Select categories'),
-                            Select::make('ticketLabels')
-                                ->label('Labels')
-                                ->options(fn () => Lov::query()
-                                    ->ofType(LovType::TicketLabel)
-                                    ->active()
-                                    ->ordered()
-                                    ->pluck('name', 'id'))
-                                ->multiple()
-                                ->preload()
-                                ->native(false)
-                                ->placeholder('Select labels'),
-                        ]),
-                    Section::make('People')
-                        ->schema([
-                            Select::make('assignee_id')
-                                ->label('Assignee')
-                                ->options(function () {
-                                    $team = Filament::getTenant();
+                    Select::make('project_id')
+                        ->label('Project')
+                        ->options(fn () => Project::query()
+                            ->where('team_id', Filament::getTenant()?->id)
+                            ->pluck('name', 'id'))
+                        ->required()
+                        ->searchable()
+                        ->preload(),
+                    Select::make('type')
+                        ->options(fn () => Lov::query()
+                            ->ofType(LovType::TicketType)
+                            ->active()
+                            ->ordered()
+                            ->pluck('name', 'value'))
+                        ->default('task')
+                        ->required()
+                        ->native(false),
+                    Select::make('status')
+                        ->options(fn () => Lov::query()
+                            ->ofType(LovType::TicketStatus)
+                            ->active()
+                            ->ordered()
+                            ->pluck('name', 'value'))
+                        ->default('open')
+                        ->required()
+                        ->native(false),
+                    Select::make('priority')
+                        ->options(fn () => Lov::query()
+                            ->ofType(LovType::TicketPriority)
+                            ->active()
+                            ->ordered()
+                            ->pluck('name', 'value'))
+                        ->default('medium')
+                        ->required()
+                        ->native(false),
+                ]),
 
-                                    return $team ? $team->users()->pluck('name', 'users.id') : [];
-                                })
-                                ->searchable()
-                                ->preload(),
-                            Select::make('reporter_id')
-                                ->label('Reporter')
-                                ->options(function () {
-                                    $team = Filament::getTenant();
+            // People & Planning - 4 columns
+            Grid::make(4)
+                ->schema([
+                    Select::make('assignee_id')
+                        ->label('Assignee')
+                        ->options(function () {
+                            $team = Filament::getTenant();
 
-                                    return $team ? $team->users()->pluck('name', 'users.id') : [];
-                                })
-                                ->searchable()
-                                ->preload()
-                                ->default(fn () => auth()->id()),
-                        ]),
-                    Section::make('Planning')
-                        ->schema([
-                            Select::make('epic_id')
-                                ->label('Epic')
-                                ->options(fn () => Epic::query()
-                                    ->where('team_id', Filament::getTenant()?->id)
-                                    ->pluck('title', 'id'))
-                                ->searchable()
-                                ->preload(),
-                            Select::make('sprint_id')
-                                ->label('Sprint')
-                                ->options(fn () => Sprint::query()
-                                    ->where('team_id', Filament::getTenant()?->id)
-                                    ->pluck('name', 'id'))
-                                ->searchable()
-                                ->preload(),
-                            Select::make('parent_id')
-                                ->label('Parent Ticket')
-                                ->options(fn () => Ticket::query()
-                                    ->where('team_id', Filament::getTenant()?->id)
-                                    ->pluck('title', 'id'))
-                                ->searchable()
-                                ->preload(),
-                            TextInput::make('story_points')
-                                ->numeric()
-                                ->minValue(0)
-                                ->maxValue(100),
-                            DatePicker::make('due_date'),
-                        ]),
+                            return $team ? $team->users()->pluck('name', 'users.id') : [];
+                        })
+                        ->searchable()
+                        ->preload(),
+                    Select::make('reporter_id')
+                        ->label('Reporter')
+                        ->options(function () {
+                            $team = Filament::getTenant();
+
+                            return $team ? $team->users()->pluck('name', 'users.id') : [];
+                        })
+                        ->searchable()
+                        ->preload()
+                        ->default(fn () => auth()->id()),
+                    Select::make('epic_id')
+                        ->label('Epic')
+                        ->options(fn () => Epic::query()
+                            ->where('team_id', Filament::getTenant()?->id)
+                            ->pluck('title', 'id'))
+                        ->searchable()
+                        ->preload(),
+                    Select::make('sprint_id')
+                        ->label('Sprint')
+                        ->options(fn () => Sprint::query()
+                            ->where('team_id', Filament::getTenant()?->id)
+                            ->pluck('name', 'id'))
+                        ->searchable()
+                        ->preload(),
+                ]),
+
+            // Categories & Labels - 2 columns
+            Grid::make(2)
+                ->schema([
+                    Select::make('categories')
+                        ->label('Categories')
+                        ->options(fn () => Lov::query()
+                            ->ofType(LovType::TicketCategory)
+                            ->active()
+                            ->ordered()
+                            ->pluck('name', 'id'))
+                        ->multiple()
+                        ->preload()
+                        ->native(false)
+                        ->placeholder('Select categories'),
+                    Select::make('ticketLabels')
+                        ->label('Labels')
+                        ->options(fn () => Lov::query()
+                            ->ofType(LovType::TicketLabel)
+                            ->active()
+                            ->ordered()
+                            ->pluck('name', 'id'))
+                        ->multiple()
+                        ->preload()
+                        ->native(false)
+                        ->placeholder('Select labels'),
+                ]),
+
+            // Details row - 4 columns
+            Grid::make(4)
+                ->schema([
+                    TextInput::make('story_points')
+                        ->label('Story Points')
+                        ->numeric()
+                        ->minValue(0)
+                        ->maxValue(100)
+                        ->placeholder('0'),
+                    DatePicker::make('due_date')
+                        ->label('Due Date'),
+                    Select::make('parent_id')
+                        ->label('Parent Ticket')
+                        ->options(fn () => Ticket::query()
+                            ->where('team_id', Filament::getTenant()?->id)
+                            ->pluck('title', 'id'))
+                        ->searchable()
+                        ->preload(),
+                ]),
+
+            // Time Tracking - collapsible fieldset
+            Fieldset::make('Time Tracking')
+                ->columns(3)
+                ->schema([
+                    TextInput::make('original_estimate')
+                        ->numeric()
+                        ->suffix('min')
+                        ->label('Estimate')
+                        ->placeholder('0'),
+                    TextInput::make('time_spent')
+                        ->numeric()
+                        ->suffix('min')
+                        ->default(0)
+                        ->label('Spent')
+                        ->placeholder('0'),
+                    TextInput::make('time_remaining')
+                        ->numeric()
+                        ->suffix('min')
+                        ->label('Remaining')
+                        ->placeholder('0'),
                 ]),
         ];
     }
