@@ -15,6 +15,7 @@
         "laravel-best-practices",
         "livewire-development",
         "tailwindcss-development",
-        "blaze-optimize"
+        "blaze-optimize",
+        "deploying-laravel-cloud"
     ]
 }

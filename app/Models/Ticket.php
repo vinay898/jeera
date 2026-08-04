@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\LovType;
 use App\Enums\TicketPriority;
+use App\Enums\TicketSource;
 use App\Enums\TicketStatus;
 use App\Enums\TicketType;
 use Database\Factories\TicketFactory;
@@ -15,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable([
@@ -41,6 +43,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
     'labels',
     'custom_fields',
     'watchers',
+    'source',
+    'external_email',
+    'email_message_id',
 ])]
 class Ticket extends Model
 {
@@ -55,6 +60,7 @@ class Ticket extends Model
             'type' => TicketType::class,
             'status' => TicketStatus::class,
             'priority' => TicketPriority::class,
+            'source' => TicketSource::class,
             'labels' => 'array',
             'custom_fields' => 'array',
             'watchers' => 'array',
@@ -181,5 +187,21 @@ class Ticket extends Model
         return $this->belongsToMany(Lov::class, 'label_ticket')
             ->where('type', LovType::TicketLabel)
             ->withTimestamps();
+    }
+
+    /**
+     * @return HasOne<SlaTracking, $this>
+     */
+    public function slaTracking(): HasOne
+    {
+        return $this->hasOne(SlaTracking::class);
+    }
+
+    /**
+     * @return HasMany<EmailLog, $this>
+     */
+    public function emailLogs(): HasMany
+    {
+        return $this->hasMany(EmailLog::class);
     }
 }
