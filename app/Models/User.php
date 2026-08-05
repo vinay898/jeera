@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\TeamRole;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasTenants;
@@ -67,7 +68,49 @@ class User extends Authenticatable implements FilamentUser, HasTenants
      */
     public function teams(): BelongsToMany
     {
-        return $this->belongsToMany(Team::class)->withTimestamps();
+        return $this->belongsToMany(Team::class)
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get the user's role in a specific team.
+     */
+    public function teamRole(Team $team): ?TeamRole
+    {
+        $membership = $this->teams()->where('teams.id', $team->id)->first();
+
+        if (! $membership) {
+            return null;
+        }
+
+        return TeamRole::tryFrom($membership->pivot->role);
+    }
+
+    /**
+     * Check if the user is an owner of the given team.
+     */
+    public function isTeamOwner(Team $team): bool
+    {
+        return $this->teamRole($team) === TeamRole::Owner;
+    }
+
+    /**
+     * Check if the user is an admin of the given team.
+     */
+    public function isTeamAdmin(Team $team): bool
+    {
+        return $this->teamRole($team) === TeamRole::Admin;
+    }
+
+    /**
+     * Check if the user can manage members in the given team.
+     */
+    public function canManageTeamMembers(Team $team): bool
+    {
+        $role = $this->teamRole($team);
+
+        return $role?->canManageMembers() ?? false;
     }
 
     public function canAccessPanel(Panel $panel): bool

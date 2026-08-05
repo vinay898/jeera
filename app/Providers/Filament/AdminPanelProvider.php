@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Tenancy\RegisterTeam;
 use App\Models\Team;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -64,6 +65,7 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->registration()
             ->tenant(Team::class, slugAttribute: 'slug')
+            ->tenantRegistration(RegisterTeam::class)
             ->renderHook(
                 'panels::head.end',
                 fn () => auth()->check() ? Blade::render('<x-settings-styles />') : ''

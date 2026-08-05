@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\TeamRole;
 use Database\Factories\TeamFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,7 +26,39 @@ class Team extends Model
      */
     public function users(): BelongsToMany
     {
-        return $this->belongsToMany(User::class)->withTimestamps();
+        return $this->belongsToMany(User::class)
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    /**
+     * Get team members (alias for users).
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function members(): BelongsToMany
+    {
+        return $this->users();
+    }
+
+    /**
+     * Get team owners.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function owners(): BelongsToMany
+    {
+        return $this->users()->wherePivot('role', TeamRole::Owner->value);
+    }
+
+    /**
+     * Get team admins.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function admins(): BelongsToMany
+    {
+        return $this->users()->wherePivot('role', TeamRole::Admin->value);
     }
 
     /**
@@ -58,5 +91,23 @@ class Team extends Model
     public function customFields(): HasMany
     {
         return $this->hasMany(CustomField::class);
+    }
+
+    /**
+     * @return HasMany<TeamInvitation, $this>
+     */
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(TeamInvitation::class);
+    }
+
+    /**
+     * Get pending invitations.
+     *
+     * @return HasMany<TeamInvitation, $this>
+     */
+    public function pendingInvitations(): HasMany
+    {
+        return $this->invitations()->pending();
     }
 }
