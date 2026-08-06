@@ -257,7 +257,7 @@ class EmailSettings extends Page
         return EmailConfiguration::firstOrCreate(
             ['team_id' => $team->id],
             [
-                'inbound_email' => '',
+                'inbound_email' => null,
                 'inbound_secret' => bin2hex(random_bytes(32)),
                 'from_name' => $team->name,
                 'from_address' => '',

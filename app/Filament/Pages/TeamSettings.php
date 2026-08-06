@@ -11,14 +11,13 @@ use App\Models\TeamInvitation;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Actions\Action as TableAction;
-use Filament\Tables\Actions\ActionGroup;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
@@ -156,7 +155,7 @@ class TeamSettings extends Page implements HasTable
             ])
             ->actions([
                 ActionGroup::make([
-                    TableAction::make('change_role')
+                    Action::make('change_role')
                         ->label('Change Role')
                         ->icon(Heroicon::OutlinedPencilSquare)
                         ->form([
@@ -178,7 +177,7 @@ class TeamSettings extends Page implements HasTable
                                 ->send();
                         })
                         ->visible(fn (User $record) => $this->canChangeRole($record)),
-                    TableAction::make('remove')
+                    Action::make('remove')
                         ->label('Remove')
                         ->icon(Heroicon::OutlinedTrash)
                         ->color('danger')

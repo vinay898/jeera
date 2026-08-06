@@ -2,51 +2,34 @@
 
 namespace App\Filament\Resources\Workflows;
 
-use App\Filament\Resources\Workflows\Pages\CreateWorkflow;
+use App\Filament\Pages\KanbanBoard;
 use App\Filament\Resources\Workflows\Pages\EditWorkflow;
-use App\Filament\Resources\Workflows\Pages\ListWorkflows;
 use App\Filament\Resources\Workflows\Schemas\WorkflowForm;
-use App\Filament\Resources\Workflows\Tables\WorkflowsTable;
 use App\Models\Workflow;
-use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Support\Icons\Heroicon;
-use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 
 class WorkflowResource extends Resource
 {
     protected static ?string $model = Workflow::class;
 
-    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedArrowPath;
+    protected static bool $shouldRegisterNavigation = false;
 
-    protected static \UnitEnum|string|null $navigationGroup = 'Settings';
-
-    protected static ?int $navigationSort = 1;
+    public static function getIndexUrl(array $parameters = [], bool $isAbsolute = true, ?string $panel = null, ?Model $tenant = null, bool $shouldGuessMissingParameters = false): string
+    {
+        return KanbanBoard::getUrl(panel: $panel, tenant: $tenant);
+    }
 
     public static function form(Schema $schema): Schema
     {
         return WorkflowForm::configure($schema);
     }
 
-    public static function table(Table $table): Table
-    {
-        return WorkflowsTable::configure($table);
-    }
-
-    public static function getRelations(): array
-    {
-        return [
-            //
-        ];
-    }
-
     public static function getPages(): array
     {
         return [
-            'index' => ListWorkflows::route('/'),
-            'create' => CreateWorkflow::route('/create'),
-            'edit' => EditWorkflow::route('/{record}/edit'),
+            'edit' => EditWorkflow::route('/{record}'),
         ];
     }
 }
