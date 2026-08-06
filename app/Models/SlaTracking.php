@@ -24,6 +24,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 ])]
 class SlaTracking extends Model
 {
+    protected $table = 'sla_tracking';
+
     protected function casts(): array
     {
         return [

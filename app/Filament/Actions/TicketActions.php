@@ -125,29 +125,30 @@ class TicketActions
                 return [
                     'project_id' => $defaultProjectId,
                     'reporter_id' => auth()->id(),
+                    'type' => 'task',
+                    'status' => 'open',
+                    'priority' => 'medium',
                 ];
             })
             ->schema(TicketForm::getComponents())
             ->modalSubmitActionLabel('Create Ticket')
             ->action(function (array $data) use ($afterSave): void {
                 $team = Filament::getTenant();
-                $project = Project::find($data['project_id']);
+                $project = isset($data['project_id']) ? Project::find($data['project_id']) : null;
 
-                if (! $project) {
-                    Notification::make()
-                        ->title('Please select a project')
-                        ->danger()
-                        ->send();
-
-                    return;
+                // Generate ticket key based on project or team
+                if ($project) {
+                    $ticketCount = Ticket::where('project_id', $project->id)->count() + 1;
+                    $key = $project->key.'-'.$ticketCount;
+                } else {
+                    $ticketCount = Ticket::where('team_id', $team->id)->whereNull('project_id')->count() + 1;
+                    $key = strtoupper($team->slug).'-'.$ticketCount;
                 }
-
-                $ticketCount = Ticket::where('project_id', $project->id)->count() + 1;
 
                 $ticket = Ticket::create([
                     'team_id' => $team->id,
-                    'project_id' => $data['project_id'],
-                    'key' => $project->key.'-'.$ticketCount,
+                    'project_id' => $data['project_id'] ?? null,
+                    'key' => $key,
                     'title' => $data['title'],
                     'description' => $data['description'] ?? null,
                     'type' => $data['type'],
