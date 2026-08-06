@@ -92,7 +92,6 @@ class TicketForm
                         ->schema([
                             Select::make('project_id')
                                 ->relationship('project', 'name')
-                                ->required()
                                 ->searchable()
                                 ->preload()
                                 ->live(),
@@ -103,7 +102,6 @@ class TicketForm
                                     ->ordered()
                                     ->pluck('name', 'value'))
                                 ->default('task')
-                                ->required()
                                 ->native(false),
                             Select::make('status')
                                 ->options(fn () => Lov::query()
@@ -121,7 +119,6 @@ class TicketForm
                                     ->ordered()
                                     ->pluck('name', 'value'))
                                 ->default('medium')
-                                ->required()
                                 ->native(false),
                             Select::make('categories')
                                 ->relationship(
@@ -232,7 +229,6 @@ class TicketForm
                         ->options(fn () => Project::query()
                             ->where('team_id', Filament::getTenant()?->id)
                             ->pluck('name', 'id'))
-                        ->required()
                         ->searchable()
                         ->preload(),
                     Select::make('type')
@@ -245,7 +241,6 @@ class TicketForm
                                 $lov->value => view('components.lov-option', ['lov' => $lov])->render(),
                             ]))
                         ->default('task')
-                        ->required()
                         ->allowHtml()
                         ->native(false),
                     Select::make('status')
@@ -271,7 +266,6 @@ class TicketForm
                                 $lov->value => view('components.lov-option', ['lov' => $lov])->render(),
                             ]))
                         ->default('medium')
-                        ->required()
                         ->allowHtml()
                         ->native(false),
                 ]),
