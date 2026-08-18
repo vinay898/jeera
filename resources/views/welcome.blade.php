@@ -22,9 +22,12 @@
         <div class="max-w-6xl mx-auto px-6">
             <div class="flex items-center justify-between h-16">
                 <!-- Logo -->
-                <a href="/" class="text-xl font-semibold tracking-tight">
-                    jeera
-                </a>
+                <div class="flex items-center gap-2">
+                    <a href="/" class="text-xl font-semibold tracking-tight">
+                        jeera
+                    </a>
+                    <x-beta-badge />
+                </div>
 
                 <!-- Right side -->
                 <div class="flex items-center gap-4">

@@ -17,4 +17,17 @@ return [
 
     'ticket_form_version' => env('TICKET_FORM_VERSION', 'classic'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Beta Invite Code
+    |--------------------------------------------------------------------------
+    |
+    | During beta, new users must enter this invite code to register.
+    | Leave empty to allow open registration (no code required).
+    | Team invitations bypass this requirement.
+    |
+    */
+
+    'beta_invite_code' => env('BETA_INVITE_CODE'),
+
 ];
