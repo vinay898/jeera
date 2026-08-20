@@ -181,9 +181,6 @@ class TeamSettings extends Page implements HasTable
                     ->label('Remove')
                     ->icon(Heroicon::OutlinedTrash)
                     ->color('danger')
-                    ->requiresConfirmation()
-                    ->modalHeading('Remove team member')
-                    ->modalDescription(fn (User $record) => "Are you sure you want to remove {$record->name} from this team?")
                     ->action(function ($record) {
                         \Log::info('Remove action triggered', [
                             'record_type' => get_class($record),
