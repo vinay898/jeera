@@ -4,7 +4,6 @@ namespace App\Filament\Pages\Auth;
 
 use Filament\Auth\Http\Responses\Contracts\LoginResponse;
 use Filament\Auth\Pages\Login as BaseLogin;
-use Illuminate\Http\RedirectResponse;
 
 class Login extends BaseLogin
 {
@@ -15,14 +14,12 @@ class Login extends BaseLogin
     {
         $response = parent::authenticate();
 
+        // Livewire only picks up redirects issued via $this->redirect() -
+        // returning a Responsable object here is inert and does nothing.
         if ($response && session()->has('invitation_token')) {
-            return new class implements LoginResponse
-            {
-                public function toResponse($request): RedirectResponse
-                {
-                    return new RedirectResponse('/invitations/process');
-                }
-            };
+            $this->redirect('/invitations/process');
+
+            return null;
         }
 
         return $response;

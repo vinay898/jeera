@@ -7,7 +7,6 @@ use Filament\Auth\Pages\Register as BaseRegister;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
-use Illuminate\Http\RedirectResponse;
 use SensitiveParameter;
 
 class Register extends BaseRegister
@@ -37,15 +36,13 @@ class Register extends BaseRegister
     {
         $response = parent::register();
 
-        // If there's a pending team invitation, redirect to process it
+        // If there's a pending team invitation, redirect to process it.
+        // Livewire only picks up redirects issued via $this->redirect() -
+        // returning a Responsable object here is inert and does nothing.
         if ($response && session()->has('invitation_token')) {
-            return new class implements RegistrationResponse
-            {
-                public function toResponse($request): RedirectResponse
-                {
-                    return new RedirectResponse('/invitations/process');
-                }
-            };
+            $this->redirect('/invitations/process');
+
+            return null;
         }
 
         return $response;
