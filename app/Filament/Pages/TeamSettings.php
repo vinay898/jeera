@@ -12,7 +12,6 @@ use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
-use Filament\Tables\Actions\Action as TableAction;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
@@ -154,10 +153,10 @@ class TeamSettings extends Page implements HasTable
                     ->sortable(),
             ])
             ->recordActions([
-                TableAction::make('change_role')
+                Action::make('change_role')
                     ->label('Change Role')
                     ->icon(Heroicon::OutlinedPencilSquare)
-                    ->form([
+                    ->schema([
                         Select::make('role')
                             ->label('New Role')
                             ->options(fn (User $record) => $this->getAvailableRoles($record))
@@ -178,14 +177,16 @@ class TeamSettings extends Page implements HasTable
                         $this->resetTable();
                     })
                     ->visible(fn (User $record) => $this->canChangeRole($record)),
-                TableAction::make('remove')
+                Action::make('remove')
                     ->label('Remove')
                     ->icon(Heroicon::OutlinedTrash)
                     ->color('danger')
-                    ->requiresConfirmation()
-                    ->modalHeading('Remove team member')
-                    ->modalDescription(fn (User $record) => "Are you sure you want to remove {$record->name} from this team?")
-                    ->action(function (User $record): void {
+                    ->action(function ($record) {
+                        \Log::info('Remove action triggered', [
+                            'record_type' => get_class($record),
+                            'record_id' => $record->id ?? 'no id',
+                        ]);
+
                         $team = $this->getTeam();
                         $record->teams()->detach($team->id);
 
