@@ -43,7 +43,7 @@ class Register extends BaseRegister
             {
                 public function toResponse($request): RedirectResponse
                 {
-                    return redirect('/invitations/process');
+                    return new RedirectResponse('/invitations/process');
                 }
             };
         }
