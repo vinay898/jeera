@@ -153,7 +153,7 @@ class TeamSettings extends Page implements HasTable
                     ->dateTime()
                     ->sortable(),
             ])
-            ->actions([
+            ->recordActions([
                 ActionGroup::make([
                     Action::make('change_role')
                         ->label('Change Role')
