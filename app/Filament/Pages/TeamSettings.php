@@ -134,7 +134,7 @@ class TeamSettings extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query($this->getTeam()->users()->getQuery())
+            ->relationship(fn () => $this->getTeam()->users())
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
