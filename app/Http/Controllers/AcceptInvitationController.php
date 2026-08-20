@@ -106,7 +106,7 @@ class AcceptInvitationController extends Controller
             $invitation->markAsAccepted();
             session()->forget('invitation_token');
 
-            return redirect()->route('filament.admin.pages.dashboard', ['tenant' => $invitation->team->slug])
+            return redirect("/admin/{$invitation->team->slug}")
                 ->with('status', 'You are already a member of this team.');
         }
 
@@ -118,7 +118,7 @@ class AcceptInvitationController extends Controller
         $invitation->markAsAccepted();
         session()->forget('invitation_token');
 
-        return redirect()->route('filament.admin.pages.dashboard', ['tenant' => $invitation->team->slug])
+        return redirect("/admin/{$invitation->team->slug}")
             ->with('status', "You've joined {$invitation->team->name}!");
     }
 
