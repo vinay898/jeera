@@ -38,7 +38,7 @@ class Register extends BaseRegister
         $response = parent::register();
 
         // If there's a pending team invitation, redirect to process it
-        if (session()->has('invitation_token')) {
+        if ($response && session()->has('invitation_token')) {
             return new class implements RegistrationResponse
             {
                 public function toResponse($request): RedirectResponse
