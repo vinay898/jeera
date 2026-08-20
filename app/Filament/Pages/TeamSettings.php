@@ -175,6 +175,8 @@ class TeamSettings extends Page implements HasTable
                                 ->success()
                                 ->title('Role updated')
                                 ->send();
+
+                            $this->resetTable();
                         })
                         ->visible(fn (User $record) => $this->canChangeRole($record)),
                     Action::make('remove')
@@ -191,6 +193,8 @@ class TeamSettings extends Page implements HasTable
                                 ->success()
                                 ->title('Member removed')
                                 ->send();
+
+                            $this->resetTable();
                         })
                         ->visible(fn (User $record) => $this->canRemoveMember($record)),
                 ]),
