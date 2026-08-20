@@ -184,18 +184,14 @@ class TeamSettings extends Page implements HasTable
                     ->requiresConfirmation()
                     ->modalHeading('Remove team member')
                     ->modalDescription(fn (User $record) => "Are you sure you want to remove {$record->name} from this team?")
-                    ->action(function (User $record): void {
-                        $team = $this->getTeam();
-
-                        \Log::info('Removing member', [
-                            'user_id' => $record->id,
-                            'team_id' => $team->id,
-                            'user_name' => $record->name,
+                    ->action(function ($record) {
+                        \Log::info('Remove action triggered', [
+                            'record_type' => get_class($record),
+                            'record_id' => $record->id ?? 'no id',
                         ]);
 
-                        $deleted = $record->teams()->detach($team->id);
-
-                        \Log::info('Detach result', ['deleted' => $deleted]);
+                        $team = $this->getTeam();
+                        $record->teams()->detach($team->id);
 
                         Notification::make()
                             ->success()
