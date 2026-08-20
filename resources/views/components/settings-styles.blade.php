@@ -16,6 +16,24 @@
 @endphp
 
 <style>
+    /* 80% UI scale for compact view */
+    body.fi-body {
+        zoom: 0.85;
+    }
+
+    /* Full-width content - reduce side margins */
+    .fi-body .fi-main-ctn,
+    .fi-body .fi-main,
+    .fi-body main,
+    .fi-body [class*="max-w-"] {
+        max-width: 100% !important;
+    }
+
+    .fi-body .mx-auto {
+        margin-left: 1rem !important;
+        margin-right: 1rem !important;
+    }
+
     @if($fontSize !== 'medium')
     /* Font size - target body and key Filament elements */
     body.fi-body {

@@ -2,10 +2,12 @@
 
 namespace App\Filament\Pages\Auth;
 
+use Filament\Auth\Http\Responses\Contracts\RegistrationResponse;
 use Filament\Auth\Pages\Register as BaseRegister;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Schema;
+use Illuminate\Http\RedirectResponse;
 use SensitiveParameter;
 
 class Register extends BaseRegister
@@ -14,8 +16,8 @@ class Register extends BaseRegister
     {
         $components = [];
 
-        // Add invite code field if configured
-        if ($this->hasInviteCodeRequirement()) {
+        // Add invite code field if configured AND user is not coming from a team invitation
+        if ($this->hasInviteCodeRequirement() && ! $this->hasTeamInvitation()) {
             $components[] = $this->getInviteCodeFormComponent();
         }
 
@@ -26,6 +28,27 @@ class Register extends BaseRegister
         $components[] = $this->getPasswordConfirmationFormComponent();
 
         return $schema->components($components);
+    }
+
+    /**
+     * Override register to redirect to invitation processing if applicable.
+     */
+    public function register(): ?RegistrationResponse
+    {
+        $response = parent::register();
+
+        // If there's a pending team invitation, redirect to process it
+        if (session()->has('invitation_token')) {
+            return new class implements RegistrationResponse
+            {
+                public function toResponse($request): RedirectResponse
+                {
+                    return redirect('/invitations/process');
+                }
+            };
+        }
+
+        return $response;
     }
 
     protected function getInviteCodeFormComponent(): Component
@@ -51,6 +74,14 @@ class Register extends BaseRegister
     protected function hasInviteCodeRequirement(): bool
     {
         return filled(config('jeera.beta_invite_code'));
+    }
+
+    /**
+     * Check if user is coming from a team invitation.
+     */
+    protected function hasTeamInvitation(): bool
+    {
+        return session()->has('invitation_token');
     }
 
     /**
