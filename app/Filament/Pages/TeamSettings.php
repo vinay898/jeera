@@ -11,7 +11,6 @@ use App\Models\TeamInvitation;
 use App\Models\User;
 use BackedEnum;
 use Filament\Actions\Action;
-use Filament\Actions\ActionGroup;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -154,61 +153,58 @@ class TeamSettings extends Page implements HasTable
                     ->sortable(),
             ])
             ->recordActions([
-                ActionGroup::make([
-                    Action::make('change_role')
-                        ->label('Change Role')
-                        ->icon(Heroicon::OutlinedPencilSquare)
-                        ->form([
-                            Select::make('role')
-                                ->label('New Role')
-                                ->options(fn (User $record) => $this->getAvailableRoles($record))
-                                ->default(fn (User $record) => $record->pivot->role)
-                                ->required()
-                                ->native(false),
-                        ])
-                        ->action(function (User $record, array $data): void {
-                            $this->getTeam()->users()->updateExistingPivot($record->id, [
-                                'role' => $data['role'],
-                            ]);
+                Action::make('change_role')
+                    ->label('Change Role')
+                    ->icon(Heroicon::OutlinedPencilSquare)
+                    ->schema([
+                        Select::make('role')
+                            ->label('New Role')
+                            ->options(fn (User $record) => $this->getAvailableRoles($record))
+                            ->default(fn (User $record) => $record->pivot->role)
+                            ->required()
+                            ->native(false),
+                    ])
+                    ->action(function (User $record, array $data): void {
+                        $this->getTeam()->users()->updateExistingPivot($record->id, [
+                            'role' => $data['role'],
+                        ]);
 
-                            Notification::make()
-                                ->success()
-                                ->title('Role updated')
-                                ->send();
+                        Notification::make()
+                            ->success()
+                            ->title('Role updated')
+                            ->send();
 
-                            $this->resetTable();
-                        })
-                        ->visible(fn (User $record) => $this->canChangeRole($record)),
-                    Action::make('remove')
-                        ->label('Remove')
-                        ->icon(Heroicon::OutlinedTrash)
-                        ->color('danger')
-                        ->requiresConfirmation()
-                        ->modalHeading('Remove team member')
-                        ->modalDescription(fn (User $record) => "Are you sure you want to remove {$record->name} from this team?")
-                        ->action(function (User $record): void {
-                            $team = $this->getTeam();
+                        $this->resetTable();
+                    })
+                    ->visible(fn (User $record) => $this->canChangeRole($record)),
+                Action::make('remove')
+                    ->label('Remove')
+                    ->icon(Heroicon::OutlinedTrash)
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading('Remove team member')
+                    ->modalDescription(fn (User $record) => "Are you sure you want to remove {$record->name} from this team?")
+                    ->action(function (User $record): void {
+                        $team = $this->getTeam();
 
-                            \Log::info('Removing member', [
-                                'user_id' => $record->id,
-                                'team_id' => $team->id,
-                                'user_name' => $record->name,
-                            ]);
+                        \Log::info('Removing member', [
+                            'user_id' => $record->id,
+                            'team_id' => $team->id,
+                            'user_name' => $record->name,
+                        ]);
 
-                            // Detach from user's side to ensure it works
-                            $deleted = $record->teams()->detach($team->id);
+                        $deleted = $record->teams()->detach($team->id);
 
-                            \Log::info('Detach result', ['deleted' => $deleted]);
+                        \Log::info('Detach result', ['deleted' => $deleted]);
 
-                            Notification::make()
-                                ->success()
-                                ->title('Member removed')
-                                ->send();
+                        Notification::make()
+                            ->success()
+                            ->title('Member removed')
+                            ->send();
 
-                            $this->resetTable();
-                        })
-                        ->visible(fn (User $record) => $this->canRemoveMember($record)),
-                ]),
+                        $this->resetTable();
+                    })
+                    ->visible(fn (User $record) => $this->canRemoveMember($record)),
             ])
             ->emptyStateHeading('No team members')
             ->emptyStateDescription('Invite members to collaborate on this team.');
