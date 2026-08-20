@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages\Auth;
 
+use App\Models\TeamInvitation;
 use Filament\Auth\Http\Responses\Contracts\RegistrationResponse;
 use Filament\Auth\Pages\Register as BaseRegister;
 use Filament\Forms\Components\TextInput;
@@ -46,6 +47,22 @@ class Register extends BaseRegister
         }
 
         return $response;
+    }
+
+    protected function getEmailFormComponent(): Component
+    {
+        $component = parent::getEmailFormComponent();
+
+        if ($this->hasTeamInvitation()) {
+            $invitedEmail = TeamInvitation::where('token', session('invitation_token'))
+                ->value('email');
+
+            if ($invitedEmail) {
+                $component->default($invitedEmail)->readOnly();
+            }
+        }
+
+        return $component;
     }
 
     protected function getInviteCodeFormComponent(): Component
