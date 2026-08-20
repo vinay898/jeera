@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Login;
 use App\Filament\Pages\Auth\Register;
 use App\Filament\Pages\KanbanBoard;
 use App\Filament\Pages\Tenancy\RegisterTeam;
@@ -64,7 +65,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(Login::class)
             ->registration(Register::class)
             ->tenant(Team::class, slugAttribute: 'slug')
             ->tenantRegistration(RegisterTeam::class)
