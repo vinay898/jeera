@@ -584,7 +584,7 @@ new class extends Component implements HasActions, HasForms
     {{-- Kanban Board --}}
     <div style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 16px; min-height: 70vh;">
         @foreach ($this->statuses as $status)
-            <div style="flex-shrink: 0; width: 280px;">
+            <div style="flex-shrink: 0; width: 280px; display: flex; flex-direction: column; max-height: calc(100vh - 320px);">
                 {{-- Column Header --}}
                 <div style="background: {{ $this->getStatusHeaderBgColor($status->color ?? 'gray') }}; border-radius: 8px 8px 0 0; padding: 12px; border: 1px solid #e5e7eb; border-bottom: none;">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -610,7 +610,7 @@ new class extends Component implements HasActions, HasForms
                     wire:sort="handleSort"
                     wire:sort:group="tickets"
                     wire:sort:group-id="{{ $status->value }}"
-                    style="background: #f9fafb; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none; padding: 8px; min-height: 400px;"
+                    style="background: #f9fafb; border-radius: 0 0 8px 8px; border: 1px solid #e5e7eb; border-top: none; padding: 8px; min-height: 100px; flex: 1; overflow-y: auto;"
                 >
                     @forelse ($this->ticketsByStatus[$status->value] ?? [] as $ticket)
                         @php
