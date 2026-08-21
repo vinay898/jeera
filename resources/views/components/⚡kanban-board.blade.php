@@ -397,6 +397,12 @@ new class extends Component implements HasActions, HasForms
 ?>
 
 <div>
+    <style>
+        .kanban-filter-select option {
+            padding: 6px 10px;
+        }
+    </style>
+
     {{-- Filter Bar --}}
     <div style="margin-bottom: 16px; padding: 16px; background: white; border-radius: 12px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
@@ -409,6 +415,7 @@ new class extends Component implements HasActions, HasForms
                     </label>
                     <select
                         id="project-filter"
+                        class="kanban-filter-select"
                         wire:model.live="projectIds"
                         multiple
                         size="1"
@@ -427,6 +434,7 @@ new class extends Component implements HasActions, HasForms
                     </label>
                     <select
                         id="epic-filter"
+                        class="kanban-filter-select"
                         wire:model.live="epicIds"
                         multiple
                         size="1"
@@ -445,6 +453,7 @@ new class extends Component implements HasActions, HasForms
                     </label>
                     <select
                         id="assignee-filter"
+                        class="kanban-filter-select"
                         wire:model.live="assigneeIds"
                         multiple
                         size="1"
@@ -463,6 +472,7 @@ new class extends Component implements HasActions, HasForms
                     </label>
                     <select
                         id="category-filter"
+                        class="kanban-filter-select"
                         wire:model.live="categoryIds"
                         multiple
                         size="1"
@@ -481,6 +491,7 @@ new class extends Component implements HasActions, HasForms
                     </label>
                     <select
                         id="label-filter"
+                        class="kanban-filter-select"
                         wire:model.live="labelIds"
                         multiple
                         size="1"
