@@ -110,6 +110,20 @@ class Ticket extends Model
     }
 
     /**
+     * Find the given parent ticket if it exists and is not yet resolved.
+     */
+    public static function findUnresolvedParent(?int $parentId): ?self
+    {
+        if (! $parentId) {
+            return null;
+        }
+
+        $parent = static::find($parentId);
+
+        return ($parent && ! $parent->status->isResolved()) ? $parent : null;
+    }
+
+    /**
      * @return BelongsTo<Sprint, $this>
      */
     public function sprint(): BelongsTo

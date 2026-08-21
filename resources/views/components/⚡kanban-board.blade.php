@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\LovType;
+use App\Enums\TicketStatus;
 use App\Filament\Actions\TicketActions;
 use App\Models\Epic;
 use App\Models\Lov;
@@ -221,6 +222,21 @@ new class extends Component implements HasActions, HasForms
     public function handleSort(int $ticketId, int $position, string $statusValue): void
     {
         $ticket = Ticket::where('team_id', $this->team->id)->findOrFail($ticketId);
+
+        if ($statusValue === TicketStatus::Done->value) {
+            $unresolvedParent = Ticket::findUnresolvedParent($ticket->parent_id);
+
+            if ($unresolvedParent) {
+                Notification::make()
+                    ->title("Parent ticket: {$unresolvedParent->title} is not done")
+                    ->danger()
+                    ->send();
+
+                unset($this->ticketsByStatus);
+
+                return;
+            }
+        }
 
         $ticket->update([
             'status' => $statusValue,

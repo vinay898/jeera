@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Actions;
 
+use App\Enums\TicketStatus;
 use App\Filament\Resources\Tickets\Schemas\TicketForm;
 use App\Models\Project;
 use App\Models\Ticket;
@@ -66,6 +67,19 @@ class TicketActions
                         ->send();
 
                     return;
+                }
+
+                if ($data['status'] === TicketStatus::Done->value) {
+                    $unresolvedParent = Ticket::findUnresolvedParent($data['parent_id'] ?? null);
+
+                    if ($unresolvedParent) {
+                        Notification::make()
+                            ->title("Parent ticket: {$unresolvedParent->title} is not done")
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
                 }
 
                 $ticket->update([
@@ -133,6 +147,19 @@ class TicketActions
             ->schema(TicketForm::getComponents())
             ->modalSubmitActionLabel('Create Ticket')
             ->action(function (array $data) use ($afterSave): void {
+                if ($data['status'] === TicketStatus::Done->value) {
+                    $unresolvedParent = Ticket::findUnresolvedParent($data['parent_id'] ?? null);
+
+                    if ($unresolvedParent) {
+                        Notification::make()
+                            ->title("Parent ticket: {$unresolvedParent->title} is not done")
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+                }
+
                 $team = Filament::getTenant();
                 $project = isset($data['project_id']) ? Project::find($data['project_id']) : null;
 
@@ -226,6 +253,19 @@ class TicketActions
             ->schema(TicketForm::getComponents())
             ->modalSubmitActionLabel('Save Changes')
             ->action(function (array $data, Ticket $record) use ($afterSave): void {
+                if ($data['status'] === TicketStatus::Done->value) {
+                    $unresolvedParent = Ticket::findUnresolvedParent($data['parent_id'] ?? null);
+
+                    if ($unresolvedParent) {
+                        Notification::make()
+                            ->title("Parent ticket: {$unresolvedParent->title} is not done")
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+                }
+
                 $record->update([
                     'title' => $data['title'],
                     'description' => $data['description'] ?? null,
