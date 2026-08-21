@@ -32,25 +32,25 @@ new class extends Component implements HasActions, HasForms
     use InteractsWithForms;
 
     #[Url]
-    public ?int $projectId = null;
+    public array $projectIds = [];
 
     #[Url]
-    public ?int $epicId = null;
+    public array $epicIds = [];
 
     #[Url]
-    public ?int $assigneeId = null;
+    public array $assigneeIds = [];
 
     #[Url]
-    public ?int $categoryId = null;
+    public array $categoryIds = [];
 
     #[Url]
-    public ?int $labelId = null;
+    public array $labelIds = [];
 
     public ?int $editingTicketId = null;
 
     public function mount(?int $projectId = null): void
     {
-        $this->projectId = $projectId;
+        $this->projectIds = $projectId ? [$projectId] : [];
     }
 
     #[Computed]
@@ -72,8 +72,8 @@ new class extends Component implements HasActions, HasForms
     {
         $query = Epic::where('team_id', $this->team->id);
 
-        if ($this->projectId) {
-            $query->where('project_id', $this->projectId);
+        if (! empty($this->projectIds)) {
+            $query->whereIn('project_id', $this->projectIds);
         }
 
         return $query->orderBy('title')->get();
@@ -119,19 +119,19 @@ new class extends Component implements HasActions, HasForms
     public function activeFilterCount(): int
     {
         $count = 0;
-        if ($this->projectId) {
+        if (! empty($this->projectIds)) {
             $count++;
         }
-        if ($this->epicId) {
+        if (! empty($this->epicIds)) {
             $count++;
         }
-        if ($this->assigneeId) {
+        if (! empty($this->assigneeIds)) {
             $count++;
         }
-        if ($this->categoryId) {
+        if (! empty($this->categoryIds)) {
             $count++;
         }
-        if ($this->labelId) {
+        if (! empty($this->labelIds)) {
             $count++;
         }
 
@@ -144,24 +144,24 @@ new class extends Component implements HasActions, HasForms
         $query = Ticket::with(['assignee', 'project', 'epic', 'categories', 'ticketLabels'])
             ->where('team_id', $this->team->id);
 
-        if ($this->projectId) {
-            $query->where('project_id', $this->projectId);
+        if (! empty($this->projectIds)) {
+            $query->whereIn('project_id', $this->projectIds);
         }
 
-        if ($this->epicId) {
-            $query->where('epic_id', $this->epicId);
+        if (! empty($this->epicIds)) {
+            $query->whereIn('epic_id', $this->epicIds);
         }
 
-        if ($this->assigneeId) {
-            $query->where('assignee_id', $this->assigneeId);
+        if (! empty($this->assigneeIds)) {
+            $query->whereIn('assignee_id', $this->assigneeIds);
         }
 
-        if ($this->categoryId) {
-            $query->whereHas('categories', fn ($q) => $q->where('lovs.id', $this->categoryId));
+        if (! empty($this->categoryIds)) {
+            $query->whereHas('categories', fn ($q) => $q->whereIn('lovs.id', $this->categoryIds));
         }
 
-        if ($this->labelId) {
-            $query->whereHas('ticketLabels', fn ($q) => $q->where('lovs.id', $this->labelId));
+        if (! empty($this->labelIds)) {
+            $query->whereHas('ticketLabels', fn ($q) => $q->whereIn('lovs.id', $this->labelIds));
         }
 
         $tickets = $query->orderBy('priority')->get();
@@ -180,41 +180,41 @@ new class extends Component implements HasActions, HasForms
         return $grouped;
     }
 
-    public function updatedProjectId(): void
+    public function updatedProjectIds(): void
     {
-        // Reset epic filter when project changes
-        $this->epicId = null;
+        // Reset epic filter when project selection changes
+        $this->epicIds = [];
         unset($this->epics);
         unset($this->ticketsByStatus);
     }
 
-    public function updatedEpicId(): void
+    public function updatedEpicIds(): void
     {
         unset($this->ticketsByStatus);
     }
 
-    public function updatedAssigneeId(): void
+    public function updatedAssigneeIds(): void
     {
         unset($this->ticketsByStatus);
     }
 
-    public function updatedCategoryId(): void
+    public function updatedCategoryIds(): void
     {
         unset($this->ticketsByStatus);
     }
 
-    public function updatedLabelId(): void
+    public function updatedLabelIds(): void
     {
         unset($this->ticketsByStatus);
     }
 
     public function clearFilters(): void
     {
-        $this->projectId = null;
-        $this->epicId = null;
-        $this->assigneeId = null;
-        $this->categoryId = null;
-        $this->labelId = null;
+        $this->projectIds = [];
+        $this->epicIds = [];
+        $this->assigneeIds = [];
+        $this->categoryIds = [];
+        $this->labelIds = [];
         unset($this->epics);
         unset($this->ticketsByStatus);
     }
@@ -254,7 +254,7 @@ new class extends Component implements HasActions, HasForms
     public function createTicketAction(): Action
     {
         return TicketActions::create(
-            $this->projectId,
+            count($this->projectIds) === 1 ? $this->projectIds[0] : null,
             function () {
                 unset($this->ticketsByStatus);
             }
@@ -313,7 +313,7 @@ new class extends Component implements HasActions, HasForms
                     ->label('Project')
                     ->options(fn () => Project::where('team_id', $this->team->id)->pluck('name', 'id'))
                     ->required()
-                    ->default($this->projectId)
+                    ->default(count($this->projectIds) === 1 ? $this->projectIds[0] : null)
                     ->searchable(),
                 Textarea::make('description')
                     ->rows(3),
@@ -405,14 +405,15 @@ new class extends Component implements HasActions, HasForms
                 {{-- Project Filter --}}
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     <label for="project-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
-                        Project
+                        Project {{ count($this->projectIds) ? '(' . count($this->projectIds) . ')' : '' }}
                     </label>
                     <select
                         id="project-filter"
-                        wire:model.live="projectId"
-                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
+                        wire:model.live="projectIds"
+                        multiple
+                        size="1"
+                        style="padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
                     >
-                        <option value="">All Projects</option>
                         @foreach ($this->projects as $project)
                             <option value="{{ $project->id }}">{{ $project->name }}</option>
                         @endforeach
@@ -422,14 +423,15 @@ new class extends Component implements HasActions, HasForms
                 {{-- Epic Filter --}}
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     <label for="epic-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
-                        Epic
+                        Epic {{ count($this->epicIds) ? '(' . count($this->epicIds) . ')' : '' }}
                     </label>
                     <select
                         id="epic-filter"
-                        wire:model.live="epicId"
-                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
+                        wire:model.live="epicIds"
+                        multiple
+                        size="1"
+                        style="padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
                     >
-                        <option value="">All Epics</option>
                         @foreach ($this->epics as $epic)
                             <option value="{{ $epic->id }}">{{ $epic->title }}</option>
                         @endforeach
@@ -439,14 +441,15 @@ new class extends Component implements HasActions, HasForms
                 {{-- Assignee Filter --}}
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     <label for="assignee-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
-                        Assignee
+                        Assignee {{ count($this->assigneeIds) ? '(' . count($this->assigneeIds) . ')' : '' }}
                     </label>
                     <select
                         id="assignee-filter"
-                        wire:model.live="assigneeId"
-                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
+                        wire:model.live="assigneeIds"
+                        multiple
+                        size="1"
+                        style="padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 160px; cursor: pointer;"
                     >
-                        <option value="">All Assignees</option>
                         @foreach ($this->teamUsers as $user)
                             <option value="{{ $user->id }}">{{ $user->name }}</option>
                         @endforeach
@@ -456,14 +459,15 @@ new class extends Component implements HasActions, HasForms
                 {{-- Category Filter --}}
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     <label for="category-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
-                        Category
+                        Category {{ count($this->categoryIds) ? '(' . count($this->categoryIds) . ')' : '' }}
                     </label>
                     <select
                         id="category-filter"
-                        wire:model.live="categoryId"
-                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 140px; cursor: pointer;"
+                        wire:model.live="categoryIds"
+                        multiple
+                        size="1"
+                        style="padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 140px; cursor: pointer;"
                     >
-                        <option value="">All Categories</option>
                         @foreach ($this->categories as $category)
                             <option value="{{ $category->id }}">{{ $category->name }}</option>
                         @endforeach
@@ -473,14 +477,15 @@ new class extends Component implements HasActions, HasForms
                 {{-- Label Filter --}}
                 <div style="display: flex; flex-direction: column; gap: 4px;">
                     <label for="label-filter" style="font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">
-                        Label
+                        Label {{ count($this->labelIds) ? '(' . count($this->labelIds) . ')' : '' }}
                     </label>
                     <select
                         id="label-filter"
-                        wire:model.live="labelId"
-                        style="padding: 8px 32px 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 140px; cursor: pointer;"
+                        wire:model.live="labelIds"
+                        multiple
+                        size="1"
+                        style="padding: 8px 12px; border-radius: 8px; border: 1px solid #d1d5db; font-size: 14px; background: white; min-width: 140px; cursor: pointer;"
                     >
-                        <option value="">All Labels</option>
                         @foreach ($this->labels as $label)
                             <option value="{{ $label->id }}">{{ $label->name }}</option>
                         @endforeach
