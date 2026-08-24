@@ -71,9 +71,17 @@ class KanbanBoard extends Page
         ];
     }
 
+    protected function canManageSettings(): bool
+    {
+        $user = auth()->user();
+
+        return $user ? $user->canManageTeamMembers(Filament::getTenant()) : false;
+    }
+
     protected function getWorkflowAction(): Action
     {
         return Action::make('workflow')
+            ->authorize(fn () => $this->canManageSettings())
             ->label('Workflow')
             ->icon(Heroicon::OutlinedArrowPath)
             ->slideOver()
@@ -101,6 +109,7 @@ class KanbanBoard extends Page
     protected function getEmailSettingsAction(): Action
     {
         return Action::make('email_settings')
+            ->authorize(fn () => $this->canManageSettings())
             ->label('Email Settings')
             ->icon(Heroicon::OutlinedEnvelope)
             ->slideOver()
