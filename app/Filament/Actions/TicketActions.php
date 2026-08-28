@@ -163,12 +163,15 @@ class TicketActions
                 $team = Filament::getTenant();
                 $project = isset($data['project_id']) ? Project::find($data['project_id']) : null;
 
-                // Generate ticket key based on project or team
+                // Generate ticket key based on project or team.
+                // withTrashed() is required here: soft-deleted tickets still hold
+                // their key under the database's unique constraint, so counting
+                // only non-trashed tickets can regenerate an already-used key.
                 if ($project) {
-                    $ticketCount = Ticket::where('project_id', $project->id)->count() + 1;
+                    $ticketCount = Ticket::withTrashed()->where('project_id', $project->id)->count() + 1;
                     $key = $project->key.'-'.$ticketCount;
                 } else {
-                    $ticketCount = Ticket::where('team_id', $team->id)->whereNull('project_id')->count() + 1;
+                    $ticketCount = Ticket::withTrashed()->where('team_id', $team->id)->whereNull('project_id')->count() + 1;
                     $key = strtoupper($team->slug).'-'.$ticketCount;
                 }
 

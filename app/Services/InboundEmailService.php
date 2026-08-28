@@ -174,7 +174,10 @@ class InboundEmailService
      */
     protected function generateTicketKey(Project $project): string
     {
-        $lastTicket = Ticket::where('project_id', $project->id)
+        // withTrashed() is required: if the highest-id ticket was soft-deleted,
+        // the default scope would skip it and reuse its already-taken key.
+        $lastTicket = Ticket::withTrashed()
+            ->where('project_id', $project->id)
             ->orderByDesc('id')
             ->first();
 
