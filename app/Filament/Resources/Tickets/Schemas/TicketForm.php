@@ -21,6 +21,8 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 
 class TicketForm
 {
@@ -56,6 +58,7 @@ class TicketForm
                                 ->columnSpanFull()
                                 ->fileAttachmentsDisk('public')
                                 ->fileAttachmentsDirectory('ticket-descriptions')
+                                ->saveUploadedFileAttachmentUsing(fn (UploadedFile $file): string => self::storeDescriptionAttachment($file))
                                 ->resizableImages()
                                 ->toolbarButtons([
                                     'attachFiles',
@@ -227,6 +230,7 @@ class TicketForm
                 ->extraInputAttributes(['style' => 'min-height: 150px'])
                 ->fileAttachmentsDisk('public')
                 ->fileAttachmentsDirectory('ticket-descriptions')
+                ->saveUploadedFileAttachmentUsing(fn (UploadedFile $file): string => self::storeDescriptionAttachment($file))
                 ->resizableImages()
                 ->toolbarButtons([
                     'attachFiles',
@@ -604,5 +608,18 @@ class TicketForm
                     ->extraAttributes(['class' => 'bg-gray-50 dark:bg-gray-900']),
             ])->from('md'),
         ];
+    }
+
+    /**
+     * Store a description editor upload under its original (sanitised) name inside a unique folder.
+     */
+    public static function storeDescriptionAttachment(UploadedFile $file): string
+    {
+        $originalName = $file->getClientOriginalName();
+        $baseName = Str::slug(pathinfo($originalName, PATHINFO_FILENAME)) ?: 'file';
+        $extension = strtolower(pathinfo($originalName, PATHINFO_EXTENSION) ?: (string) $file->guessExtension());
+        $fileName = $extension !== '' ? $baseName.'.'.$extension : $baseName;
+
+        return $file->storeAs('ticket-descriptions/'.Str::ulid(), $fileName, 'public');
     }
 }

@@ -8,6 +8,7 @@ use App\Enums\TicketStatus;
 use App\Models\SlaConfiguration;
 use App\Models\SlaTracking;
 use App\Models\Ticket;
+use Illuminate\Support\Facades\Storage;
 
 class TicketObserver
 {
@@ -28,6 +29,54 @@ class TicketObserver
     {
         if ($ticket->wasChanged('status')) {
             $this->handleStatusChange($ticket);
+        }
+    }
+
+    /**
+     * Handle the Ticket "saved" event.
+     * Records files uploaded via the description editor as ticket attachments.
+     */
+    public function saved(Ticket $ticket): void
+    {
+        if ($ticket->wasRecentlyCreated || $ticket->wasChanged('description')) {
+            $this->syncDescriptionAttachments($ticket);
+        }
+    }
+
+    /**
+     * Create Attachment rows for description-embedded uploads not yet recorded.
+     */
+    protected function syncDescriptionAttachments(Ticket $ticket): void
+    {
+        preg_match_all('/data-id="(ticket-descriptions\/[^"]+)"/', (string) $ticket->description, $matches);
+
+        $paths = array_unique($matches[1]);
+
+        if ($paths === []) {
+            return;
+        }
+
+        $userId = auth()->id() ?? $ticket->reporter_id;
+
+        if (! $userId) {
+            return;
+        }
+
+        $disk = Storage::disk('public');
+        $existingPaths = $ticket->attachments()->whereIn('path', $paths)->pluck('path')->all();
+
+        foreach (array_diff($paths, $existingPaths) as $path) {
+            if (! $disk->exists($path)) {
+                continue;
+            }
+
+            $ticket->attachments()->create([
+                'user_id' => $userId,
+                'filename' => basename($path),
+                'path' => $path,
+                'mime_type' => $disk->mimeType($path) ?: 'application/octet-stream',
+                'size' => $disk->size($path),
+            ]);
         }
     }
 
